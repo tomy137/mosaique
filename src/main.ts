@@ -32,11 +32,12 @@ let seed = Math.floor(Math.random() * 1e9);
 
 let toastTimer = 0;
 function toast(msg: string, ms = 4000) {
-  const t = $('toast');
-  t.textContent = msg;
+  $('toast-msg').textContent = msg;
+  $('toast').hidden = !msg;
   clearTimeout(toastTimer);
-  if (ms) toastTimer = window.setTimeout(() => (t.textContent = ''), ms);
+  if (ms && msg) toastTimer = window.setTimeout(() => toast(''), ms);
 }
+$('toast-close').onclick = () => toast('');
 editor.onToast = (m) => toast(m);
 
 function updateHelp() {
@@ -555,7 +556,7 @@ window.addEventListener('keydown', (e) => {
   switch (k) {
     case 'v': editor.setMode('select'); break;
     case 'c': editor.setMode('cut'); break;
-    case 'escape': editor.sel = null; editor.setMode('select'); break;
+    case 'escape': toast(''); editor.sel = null; editor.setMode('select'); break;
     case 'delete': case 'backspace': e.preventDefault(); editor.deleteSelection(); break;
     case 'r': editor.straightenSelected(); break;
     case '0': editor.resetCrop(); break;

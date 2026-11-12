@@ -173,6 +173,14 @@ export async function ensurePermission(handle: DirHandle): Promise<boolean> {
 
 export interface FolderContent { images: File[]; heic: string[]; doc: Doc | null }
 
+const baseName = (n: string) => n.replace(/\.[^.]+$/, '').toLowerCase();
+
+/** HEIC restant à convertir : ceux qui n'ont pas déjà une image du même nom (IMG_1234.HEIC → IMG_1234.jpg). */
+export function pendingHeic(heic: string[], images: { name: string }[]): string[] {
+  const done = new Set(images.map((f) => baseName(f.name)));
+  return heic.filter((h) => !done.has(baseName(h)));
+}
+
 export async function readFolder(handle: DirHandle): Promise<FolderContent> {
   const images: File[] = [];
   const heic: string[] = [];
@@ -187,7 +195,7 @@ export async function readFolder(handle: DirHandle): Promise<FolderContent> {
       heic.push(entry.name);
     }
   }
-  return { images, heic, doc };
+  return { images, heic: pendingHeic(heic, images), doc };
 }
 
 /** Mode repli (navigateurs sans File System Access) : fichiers d'un <input webkitdirectory>, premier niveau seulement. */
@@ -202,7 +210,7 @@ export async function readFileList(files: File[]): Promise<FolderContent> {
     } else if (isImageName(f.name)) images.push(f);
     else if (isHeicName(f.name)) heic.push(f.name);
   }
-  return { images, heic, doc };
+  return { images, heic: pendingHeic(heic, images), doc };
 }
 
 /** Fichiers (premier niveau) d'un dossier déposé, via l'API d'entrées (lecture seule). */
