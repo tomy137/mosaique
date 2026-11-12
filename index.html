@@ -22,6 +22,9 @@
           <button id="btn-open" title="Ouvrir un dossier contenant les photos (O)">Ouvrir un dossier <kbd>O</kbd></button>
           <input id="dir-input" type="file" webkitdirectory multiple hidden />
         </div>
+        <div class="row">
+          <button id="btn-allow" class="primary" hidden title="Chrome demande une fois la permission d'écrire montage.json dans ce dossier">Autoriser l'enregistrement dans le dossier</button>
+        </div>
         <p class="hint">Ou <b>glisser le dossier depuis le Finder</b> n'importe où sur la page. Le dossier contient les photos ; le montage y est enregistré dans <code>montage.json</code>.</p>
         <div id="recent-block" hidden>
           <h3>Projets récents</h3>

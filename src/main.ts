@@ -25,6 +25,9 @@ const editor = new Editor($('stage'), store, lib);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let folder: any = null;
+/** Dossier ouvert en lecture seule, dont l'écriture attend un clic sur « Autoriser l'enregistrement ». */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let pendingWrite: any = null;
 let presets: FormatPreset[] = loadPresets();
 let seed = Math.floor(Math.random() * 1e9);
 
@@ -115,9 +118,15 @@ $('btn-heic-copy').onclick = async () => {
 $('btn-heic-close').onclick = () => ($('heic-box').hidden = true);
 
 /** Charge le contenu d'un dossier. `handle` est null en mode repli (sans accès en écriture). */
-async function loadProject(name: string, content: FolderContent, handle: unknown | null) {
+/**
+ * Charge le contenu d'un dossier. `handle` : dossier accessible en écriture (sinon null).
+ * `pending` : dossier lisible dont l'écriture reste à autoriser par un clic (dossier déposé dans Chrome).
+ */
+async function loadProject(name: string, content: FolderContent, handle: unknown | null, pending: unknown | null = null) {
   await flushSave(); // le projet précédent est enregistré avant de basculer
   folder = handle;
+  pendingWrite = pending;
+  $('btn-allow').hidden = !pending;
   project = name;
   setCurrentProject(name);
   const status = $('project-status');
@@ -126,7 +135,9 @@ async function loadProject(name: string, content: FolderContent, handle: unknown
   store.replace(content.doc ?? newDoc(store.doc.settings));
   renderRecent();
   await lib.addFiles(content.images, (d, t) => (status.textContent = `${name} · photos ${d}/${t}`));
-  status.textContent = handle ? `${name}/${PROJECT_FILE}` : `${name} · sauvegarde dans le navigateur uniquement`;
+  status.textContent = handle
+    ? `${name}/${PROJECT_FILE}`
+    : pending ? `${name} · pas encore enregistré dans le dossier` : `${name} · sauvegarde dans le navigateur uniquement`;
   showHeicHelp(name, content.heic);
 
   if (!lib.photos.size) {
@@ -152,7 +163,8 @@ async function loadProject(name: string, content: FolderContent, handle: unknown
     }
   }
   if (content.heic.length) msg += ` ${content.heic.length} photo(s) HEIC ignorée(s) : commande de conversion dans le panneau Photos.`;
-  if (!handle) msg += ' Ce navigateur ne peut pas écrire dans le dossier : le montage est gardé dans le navigateur (Chrome l’enregistre dans le dossier).';
+  if (pending) msg += ' Pour enregistrer le montage dans le dossier, cliquer sur « Autoriser l’enregistrement dans le dossier » (en haut à gauche) : Chrome demande la permission une seule fois.';
+  else if (!handle) msg += ' Ce navigateur (Safari, Firefox…) ne permet pas d’enregistrer dans le dossier : le montage est gardé dans le navigateur. Avec Chrome, il est enregistré dans le dossier.';
   toast(msg, content.heic.length || !handle ? 20000 : 8000);
 }
 
@@ -200,9 +212,15 @@ window.addEventListener('drop', (e) => {
 async function openDropped(handleP: Promise<any> | null, entry: FileSystemDirectoryEntry) {
   try {
     const handle = handleP ? await handleP : null;
-    if (handle?.kind === 'directory' && (await ensurePermission(handle))) {
+    if (handle?.kind === 'directory') {
+      // Un dossier déposé est lisible tout de suite, mais Chrome n'accorde l'écriture qu'après un clic :
+      // si la demande échoue ici, on propose le bouton « Autoriser l'enregistrement ».
       await rememberHandle(handle);
-      await loadProject(handle.name, await readFolder(handle), handle);
+      let writable = (await handle.queryPermission({ mode: 'readwrite' })) === 'granted';
+      if (!writable) {
+        try { writable = (await handle.requestPermission({ mode: 'readwrite' })) === 'granted'; } catch { /* pas de clic récent */ }
+      }
+      await loadProject(handle.name, await readFolder(handle), writable ? handle : null, writable ? null : handle);
       return;
     }
   } catch { /* repli en lecture seule ci-dessous */ }
@@ -212,6 +230,23 @@ async function openDropped(handleP: Promise<any> | null, entry: FileSystemDirect
     toast(`Impossible de lire le dossier « ${entry.name} » : ${(err as Error).message}`, 12000);
   }
 }
+
+$('btn-allow').onclick = async () => {
+  const h = pendingWrite;
+  if (!h) return;
+  try {
+    if (!(await ensurePermission(h))) { toast('Permission refusée : le montage reste gardé dans le navigateur.'); return; }
+  } catch (e) {
+    toast(`Autorisation impossible : ${(e as Error).message}`, 10000);
+    return;
+  }
+  folder = h;
+  pendingWrite = null;
+  $('btn-allow').hidden = true;
+  await save(store.doc);
+  renderRecent();
+  toast(`Enregistrement activé : le montage est enregistré dans ${h.name}/${PROJECT_FILE}.`, 6000);
+};
 
 $<HTMLInputElement>('dir-input').onchange = async (e) => {
   const input = e.target as HTMLInputElement;
@@ -238,7 +273,7 @@ async function renderRecent() {
   const box = $('recent');
   box.replaceChildren(...list.map((p) => {
     const row = document.createElement('div');
-    const isCurrent = p.name === project && !!folder;
+    const isCurrent = p.name === project && !!(folder || pendingWrite);
     row.className = `recent-item${isCurrent ? ' current' : ''}`;
     const open = document.createElement('button');
     open.className = 'recent-open';
