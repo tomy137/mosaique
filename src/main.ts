@@ -3,7 +3,7 @@ import { scaleTree } from './geometry/bsp';
 import { applyGenerate, fillEmpty } from './layout/edit';
 import { Library } from './photos/library';
 import {
-  ensurePermission, hasFsAccess, loadLocal, loadPresets, newDoc, pickFolder, PROJECT_FILE, readFileList, readFolder,
+  ensurePermission, hasFsAccess, loadLocal, loadPresets, newDoc, pickFolder, PROJECT_FILE, readEntryFiles, readFileList, readFolder,
   recallHandle, rememberHandle, saveLocal, savePresets, writeFile, type FolderContent,
 } from './project';
 import { Editor, PHOTO_MIME } from './render/editor';
@@ -110,6 +110,49 @@ $('btn-open').onclick = async () => {
     if ((e as Error).name !== 'AbortError') toast(`Ouverture impossible : ${(e as Error).message}`, 12000);
   }
 };
+
+// Glisser un dossier depuis le Finder sur la page = l'ouvrir comme projet (aucune fenêtre de choix).
+window.addEventListener('dragover', (e) => {
+  if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+});
+window.addEventListener('drop', (e) => {
+  const items = [...(e.dataTransfer?.items ?? [])].filter((it) => it.kind === 'file');
+  const dirItem = items.find((it) => it.webkitGetAsEntry()?.isDirectory);
+  if (!dirItem) {
+    // fichiers isolés hors de la zone de montage et de la bibliothèque : on les ajoute quand même
+    if (e.dataTransfer?.files.length && !(e.target as Element).closest?.('svg, #sidebar')) {
+      e.preventDefault();
+      addFiles([...e.dataTransfer.files]);
+    }
+    return;
+  }
+  e.preventDefault();
+  e.stopPropagation();
+  // les éléments du dépôt ne sont lisibles que pendant l'événement : on récupère tout tout de suite
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getHandle = (dirItem as any).getAsFileSystemHandle;
+  const handleP: Promise<any> | null = typeof getHandle === 'function' ? getHandle.call(dirItem) : null;
+  const entry = dirItem.webkitGetAsEntry() as FileSystemDirectoryEntry;
+  openDropped(handleP, entry);
+}, true);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function openDropped(handleP: Promise<any> | null, entry: FileSystemDirectoryEntry) {
+  try {
+    const handle = handleP ? await handleP : null;
+    if (handle?.kind === 'directory' && (await ensurePermission(handle))) {
+      await rememberHandle(handle);
+      $('btn-reopen').hidden = true;
+      await loadProject(handle.name, await readFolder(handle), handle);
+      return;
+    }
+  } catch { /* repli en lecture seule ci-dessous */ }
+  try {
+    await loadProject(entry.name, await readFileList(await readEntryFiles(entry)), null);
+  } catch (err) {
+    toast(`Impossible de lire le dossier « ${entry.name} » : ${(err as Error).message}`, 12000);
+  }
+}
 
 $<HTMLInputElement>('dir-input').onchange = async (e) => {
   const input = e.target as HTMLInputElement;

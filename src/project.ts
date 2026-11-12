@@ -153,6 +153,21 @@ export async function readFileList(files: File[]): Promise<FolderContent> {
   return { images, heic, doc };
 }
 
+/** Fichiers (premier niveau) d'un dossier déposé, via l'API d'entrées (lecture seule). */
+export function readEntryFiles(dir: FileSystemDirectoryEntry): Promise<File[]> {
+  return new Promise((resolve, reject) => {
+    const reader = dir.createReader();
+    const entries: FileSystemEntry[] = [];
+    const next = () => reader.readEntries((batch) => {
+      if (batch.length) { entries.push(...batch); next(); return; }
+      const files = entries.filter((e) => e.isFile).map((e) =>
+        new Promise<File>((res, rej) => (e as FileSystemFileEntry).file(res, rej)));
+      Promise.all(files).then(resolve, reject);
+    }, reject);
+    next();
+  });
+}
+
 export async function writeFile(handle: DirHandle, name: string, data: Blob | string): Promise<void> {
   const fh = await handle.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
