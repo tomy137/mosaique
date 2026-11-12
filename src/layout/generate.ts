@@ -15,8 +15,12 @@ export interface GenOptions {
   seed: number;
   obliquityDeg: number; // inclinaison maximale des coupes obliques
   obliqueShare: number; // proportion de coupes inclinées (0–1)
+  /** Surface minimale d'une case, en fraction de la surface moyenne (0–1). */
+  minAreaFrac?: number;
   tries?: number;
 }
+
+export const DEFAULT_MIN_AREA_FRAC = 0.4;
 
 export interface GenResult {
   root: BspNode;
@@ -71,15 +75,65 @@ function leafRects(t: Tree, rect: Rect, out: { i: number; r: Rect }[]): void {
   }
 }
 
-function score(t: Tree, W: number, H: number): number {
+function score(t: Tree, W: number, H: number, minFrac: number): number {
   const fit = Math.abs(Math.log(t.a / (W / H)));
   const rects: { i: number; r: Rect }[] = [];
   leafRects(t, { x: 0, y: 0, w: W, h: H }, rects);
   const areas = rects.map((o) => o.r.w * o.r.h);
   const spread = Math.log(Math.max(...areas) / Math.min(...areas));
-  // cases trop fines (moins de 1/12 de la petite dimension de la page)
-  const thin = rects.filter((o) => Math.min(o.r.w, o.r.h) < Math.min(W, H) / 12).length;
-  return 4 * fit + 0.4 * Math.max(0, spread - Math.log(10)) + 0.5 * thin;
+  // cases sous la surface minimale : pénalité forte, proportionnelle à l'écart
+  const minA = (minFrac * W * H) / rects.length;
+  let small = 0;
+  for (const a of areas) if (a < minA) small += Math.log(minA / a);
+  // cases très allongées (la photo y serait fortement rognée)
+  const thin = rects.filter((o) => Math.max(o.r.w / o.r.h, o.r.h / o.r.w) > 3.2).length;
+  return 4 * fit + 6 * small + 0.4 * Math.max(0, spread - Math.log(10)) + 0.5 * thin;
+}
+
+/** Recalcule les ratios de bas en haut après une modification de l'arbre. */
+function recompute(t: Tree, aspects: number[]): number {
+  if ('leaf' in t) return (t.a = aspects[t.leaf]);
+  const l = recompute(t.l, aspects), r = recompute(t.r, aspects);
+  return (t.a = t.dir === 'V' ? l + r : 1 / (1 / l + 1 / r));
+}
+
+const cloneTree = (t: Tree): Tree => ('leaf' in t ? { ...t } : { ...t, l: cloneTree(t.l), r: cloneTree(t.r) });
+
+type Inner = Extract<Tree, { dir: 'V' | 'H' }>;
+
+function nodesOf(t: Tree, inner: Inner[] = [], leaves: Extract<Tree, { leaf: number }>[] = []) {
+  if ('leaf' in t) leaves.push(t);
+  else { inner.push(t); nodesOf(t.l, inner, leaves); nodesOf(t.r, inner, leaves); }
+  return { inner, leaves };
+}
+
+/** Petite modification aléatoire : sens d'une coupe, échange de deux photos, ou rotation d'un sous-arbre. */
+function mutate(t: Tree, rnd: () => number): void {
+  const { inner, leaves } = nodesOf(t);
+  if (!inner.length) return;
+  const pick = <T>(a: T[]) => a[Math.floor(rnd() * a.length)];
+  const op = rnd();
+  if (op < 0.35) {
+    const n = pick(inner);
+    n.dir = n.dir === 'V' ? 'H' : 'V';
+  } else if (op < 0.6 && leaves.length > 1) {
+    const a = pick(leaves), b = pick(leaves);
+    [a.leaf, b.leaf] = [b.leaf, a.leaf];
+  } else {
+    // rotation : (A (B C)) → ((A B) C), ou l'inverse — change l'équilibre des surfaces
+    const cands = inner.filter((n) => !('leaf' in n.l) || !('leaf' in n.r));
+    if (!cands.length) return;
+    const x = pick(cands);
+    if (!('leaf' in x.r) && (rnd() < 0.5 || 'leaf' in x.l)) {
+      const y = x.r as Inner;
+      x.l = { dir: rnd() < 0.5 ? 'V' : 'H', l: x.l, r: y.l, a: 0 };
+      x.r = y.r;
+    } else {
+      const y = x.l as Inner;
+      x.r = { dir: rnd() < 0.5 ? 'V' : 'H', l: y.r, r: x.r, a: 0 };
+      x.l = y.l;
+    }
+  }
 }
 
 /** Construit l'arbre BSP ; les coupes partent du bord du rectangle idéal. */
@@ -129,13 +183,32 @@ export function generate(o: GenOptions): GenResult {
   if (n === 0) return { root: { id: 'r' }, cellOf: [] };
   const rnd = mulberry32(o.seed);
   const idx = [...Array(n).keys()];
-  let best: Tree | null = null;
-  let bestScore = Infinity;
-  const tries = o.tries ?? (n > 40 ? 2500 : 5000);
+  const minFrac = o.minAreaFrac ?? DEFAULT_MIN_AREA_FRAC;
+  const sc = (t: Tree) => score(t, W, H, minFrac);
+
+  // 1. tirage : on garde les meilleurs arbres aléatoires
+  const tries = o.tries ?? 1500;
+  const pool: { t: Tree; s: number }[] = [];
   for (let k = 0; k < tries; k++) {
     const t = randomTree(shuffle(idx, rnd), o.aspects, rnd);
-    const sc = score(t, W, H);
-    if (sc < bestScore) { bestScore = sc; best = t; }
+    pool.push({ t, s: sc(t) });
+  }
+  pool.sort((u, v) => u.s - v.s);
+
+  // 2. amélioration locale des meilleurs candidats (on ne garde que les modifications utiles)
+  let best = pool[0].t;
+  let bestScore = pool[0].s;
+  const steps = Math.min(6000, 1500 + n * 60);
+  for (const cand of pool.slice(0, 4)) {
+    let cur = cand.t, curScore = cand.s;
+    for (let k = 0; k < steps; k++) {
+      const next = cloneTree(cur);
+      mutate(next, rnd);
+      recompute(next, o.aspects);
+      const s2 = sc(next);
+      if (s2 <= curScore) { cur = next; curScore = s2; }
+    }
+    if (curScore < bestScore) { best = cur; bestScore = curScore; }
   }
   const root: BspNode = { id: 'r' };
   const cellOf: string[] = new Array(n);

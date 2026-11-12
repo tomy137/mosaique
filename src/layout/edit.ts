@@ -106,7 +106,7 @@ export function fillEmpty(doc: Doc, lib: Library): number {
   return n;
 }
 
-export interface GenerateParams { count: number; seed: number; obliquityDeg: number; obliqueShare: number }
+export interface GenerateParams { count: number; seed: number; obliquityDeg: number; obliqueShare: number; minAreaFrac: number }
 
 /** Génère une mise en page. Avec des photos : une case par photo, placées automatiquement. */
 export function applyGenerate(doc: Doc, lib: Library, g: GenerateParams): void {
@@ -116,6 +116,7 @@ export function applyGenerate(doc: Doc, lib: Library, g: GenerateParams): void {
   if (aspects.length < n) aspects.push(...placeholderAspects(n - aspects.length, g.seed));
   const { root, cellOf } = generate({
     aspects, settings: doc.settings, seed: g.seed, obliquityDeg: g.obliquityDeg, obliqueShare: g.obliqueShare,
+    minAreaFrac: g.minAreaFrac,
   });
   doc.root = root;
   doc.crops = {};

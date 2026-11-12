@@ -59,6 +59,9 @@
           <label class="field">Part oblique<input id="gen-share" type="range" min="0" max="100" step="5" /></label>
         </div>
         <div class="row">
+          <label class="field" title="Surface minimale d'une case, par rapport à la case moyenne">Taille min. des cases<input id="gen-min" type="range" min="0" max="80" step="5" /></label>
+        </div>
+        <div class="row">
           <button id="btn-gen" class="primary" title="Générer une mise en page (G)">Générer <kbd>G</kbd></button>
           <button id="btn-variant" title="Autre variante avec les mêmes réglages (⇧G)">Variante <kbd>⇧G</kbd></button>
         </div>
@@ -73,6 +76,15 @@
         <h2>Photos <span id="photo-count" class="muted"></span></h2>
         <div class="row">
           <label class="button" title="Ajouter des photos (A)">Ajouter… <kbd>A</kbd><input id="file-input" type="file" accept="image/*" multiple hidden /></label>
+        </div>
+        <div id="heic-box" class="heic-box" hidden>
+          <p><b id="heic-count"></b>, que Chrome ne sait pas lire. Pour les convertir en JPEG, coller dans le Terminal :</p>
+          <pre><code id="heic-cmd"></code></pre>
+          <div class="row">
+            <button id="btn-heic-copy" class="primary">Copier</button>
+            <button id="btn-heic-close">Masquer</button>
+          </div>
+          <p class="hint" id="heic-after"></p>
         </div>
         <div id="library" class="library"></div>
       </section>

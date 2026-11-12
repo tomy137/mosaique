@@ -92,6 +92,17 @@ kbd {
 }
 button.primary kbd { color: #ffe9e4; border-color: #e88a7d; }
 
+.heic-box {
+  margin-top: 8px; padding: 10px; border-radius: var(--radius);
+  background: rgba(232, 163, 61, 0.12); border: 1px solid rgba(232, 163, 61, 0.5);
+}
+.heic-box p { margin: 0 0 6px; font-size: 12px; line-height: 1.4; }
+.heic-box pre {
+  margin: 0; padding: 8px; background: #141210; border-radius: 5px; white-space: pre-wrap; word-break: break-all;
+  font: 11px/1.45 ui-monospace, 'SF Mono', monospace; color: #f3d9a8; user-select: all;
+}
+.heic-box pre code { background: none; padding: 0; font: inherit; }
+
 .library {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; margin-top: 8px;
 }

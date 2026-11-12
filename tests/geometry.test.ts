@@ -105,6 +105,15 @@ describe('génération', () => {
     expect(close).toBeGreaterThanOrEqual(24);
   });
 
+  it('respecte la surface minimale, même avec beaucoup de photos', () => {
+    for (const [n, frac] of [[40, 0.4], [70, 0.4], [50, 0.6]] as const) {
+      const { root } = generate({ aspects: placeholderAspects(n, n), settings: S, seed: n, obliquityDeg: 0, obliqueShare: 0, minAreaFrac: frac });
+      const areas = [...computeCells(root, S).leaves.values()].map(area);
+      const mean = (S.widthMm * S.heightMm) / n;
+      expect(Math.min(...areas) / mean).toBeGreaterThanOrEqual(frac * 0.95);
+    }
+  });
+
   it('les coupes obliques restent valides', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
       const { root } = generate({ aspects: placeholderAspects(25, seed), settings: S, seed, obliquityDeg: 12, obliqueShare: 0.5 });

@@ -1,6 +1,7 @@
 import './style.css';
 import { scaleTree } from './geometry/bsp';
 import { applyGenerate, fillEmpty } from './layout/edit';
+import { DEFAULT_MIN_AREA_FRAC } from './layout/generate';
 import { Library } from './photos/library';
 import {
   ensurePermission, hasFsAccess, loadLocal, loadPresets, newDoc, pickFolder, PROJECT_FILE, readEntryFiles, readFileList, readFolder,
@@ -62,7 +63,43 @@ async function save(doc: Doc) {
 
 // ------------------------------------------------------------------ dossier de projet
 
-const HEIC_HINT = 'Pour les convertir dans le Terminal : sips -s format jpeg *.HEIC --out .';
+// ------------------------------------------------------------------ conversion HEIC
+
+const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+/** Commande de conversion : un .jpg à côté de chaque .HEIC (sips garderait sinon l'extension .HEIC). */
+function heicCommand(dir: string | null): string {
+  const cd = dir ? `cd ${shellQuote(dir)}` : `cd « glisser ici le dossier depuis le Finder »`;
+  return `${cd} && for f in *.[hH][eE][iI][cC]; do sips -s format jpeg "$f" --out "\${f%.*}.jpg" >/dev/null; done && echo "Conversion terminée"`;
+}
+
+async function showHeicHelp(folderName: string, heic: string[]) {
+  if (!heic.length) { $('heic-box').hidden = true; return; }
+  $('heic-count').textContent = `${heic.length} photo(s) HEIC ignorée(s)`;
+  $('heic-cmd').textContent = heicCommand(null);
+  $('heic-after').textContent = 'Recherche du chemin du dossier…';
+  $('heic-box').hidden = false;
+  let dir: string | null = null;
+  try {
+    const r = await fetch(`/api/locate?name=${encodeURIComponent(folderName)}&file=${encodeURIComponent(heic[0])}`);
+    dir = (await r.json()).path ?? null;
+  } catch { /* serveur sans l'API : commande générique */ }
+  $('heic-cmd').textContent = heicCommand(dir);
+  $('heic-after').textContent = (dir
+    ? ''
+    : `Chemin de « ${folderName} » introuvable automatiquement : remplacer la partie entre guillemets en glissant le dossier dans le Terminal. `)
+    + 'Une fois la conversion terminée, glisser à nouveau le dossier sur la page.';
+}
+
+$('btn-heic-copy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($('heic-cmd').textContent ?? '');
+    toast('Commande copiée : la coller dans le Terminal (⌘V puis Entrée).');
+  } catch {
+    toast('Copie impossible : sélectionner la commande et faire ⌘C.');
+  }
+};
+$('btn-heic-close').onclick = () => ($('heic-box').hidden = true);
 
 /** Charge le contenu d'un dossier. `handle` est null en mode repli (sans accès en écriture). */
 async function loadProject(name: string, content: FolderContent, handle: unknown | null) {
@@ -73,10 +110,11 @@ async function loadProject(name: string, content: FolderContent, handle: unknown
   if (content.doc) store.replace(content.doc);
   await lib.addFiles(content.images, (d, t) => (status.textContent = `${name} · photos ${d}/${t}`));
   status.textContent = handle ? `${name}/${PROJECT_FILE}` : `${name} · sauvegarde dans le navigateur uniquement`;
+  showHeicHelp(name, content.heic);
 
   if (!lib.photos.size) {
     toast(content.heic.length
-      ? `Aucune photo lisible dans « ${name} » : ${content.heic.length} photo(s) HEIC, que Chrome ne sait pas lire. ${HEIC_HINT}`
+      ? `Aucune photo lisible dans « ${name} » : uniquement des HEIC. La commande de conversion est dans le panneau Photos.`
       : `Aucune photo (JPEG, PNG, WebP…) trouvée dans « ${name} ».`, 20000);
     return;
   }
@@ -89,8 +127,14 @@ async function loadProject(name: string, content: FolderContent, handle: unknown
     msg = `${lib.photos.size} photo(s) chargée(s) et placée(s). « Variante » (⇧G) pour une autre mise en page.`;
   } else {
     msg = `Montage « ${name} » rouvert : ${lib.photos.size} photo(s).`;
+    const used = new Set(Object.values(store.doc.crops).map((c) => c.photo));
+    const fresh = [...lib.photos.keys()].filter((n) => !used.has(n)).length;
+    if (fresh) {
+      genCount.value = String(lib.photos.size);
+      msg += ` ${fresh} photo(s) pas encore placée(s) : « Générer » (G) refait la mise en page avec toutes les photos.`;
+    }
   }
-  if (content.heic.length) msg += ` ${content.heic.length} photo(s) HEIC ignorée(s). ${HEIC_HINT}`;
+  if (content.heic.length) msg += ` ${content.heic.length} photo(s) HEIC ignorée(s) : commande de conversion dans le panneau Photos.`;
   if (!handle) msg += ' Ce navigateur ne peut pas écrire dans le dossier : le montage est gardé dans le navigateur (Chrome l’enregistre dans le dossier).';
   toast(msg, content.heic.length || !handle ? 20000 : 8000);
 }
@@ -274,21 +318,23 @@ $('bg').onchange = () => store.change((d) => { d.settings.bg = $<HTMLInputElemen
 const genCount = $<HTMLInputElement>('gen-count');
 $<HTMLInputElement>('gen-angle').value = '6';
 $<HTMLInputElement>('gen-share').value = '35';
+$<HTMLInputElement>('gen-min').value = String(DEFAULT_MIN_AREA_FRAC * 100);
 genCount.value = '30';
 let countTouched = false;
 genCount.oninput = () => (countTouched = true);
 
 function genInfo() {
-  $('gen-info').textContent = `Obliquité ${num('gen-angle')}° sur ${num('gen-share')} % des coupes · variante n° ${seed % 1000}`;
+  $('gen-info').textContent = `Obliquité ${num('gen-angle')}° sur ${num('gen-share')} % des coupes · plus petite case ≥ ${num('gen-min')} % de la moyenne · variante n° ${seed % 1000}`;
 }
 $('gen-angle').oninput = genInfo;
 $('gen-share').oninput = genInfo;
+$('gen-min').oninput = genInfo;
 
 function generateLayout(newSeed = true) {
   if (newSeed) seed = Math.floor(Math.random() * 1e9);
   const count = Math.max(1, Math.min(120, num('gen-count') || lib.photos.size || 30));
   store.change((d) => applyGenerate(d, lib, {
-    count, seed, obliquityDeg: num('gen-angle'), obliqueShare: num('gen-share') / 100,
+    count, seed, obliquityDeg: num('gen-angle'), obliqueShare: num('gen-share') / 100, minAreaFrac: num('gen-min') / 100,
   }));
   genInfo();
 }
@@ -315,7 +361,7 @@ async function addFiles(files: File[], cellId: string | null = null) {
     }
   }
   if (cellId && names[0]) store.change((d) => { d.crops[cellId] = { photo: names[0], fx: 0.5, fy: 0.5, zoom: 1 }; });
-  toast(`${names.length} photo(s) ajoutée(s)${skipped.length ? `, ${skipped.length} ignorée(s)` : ''}${heic ? ' (HEIC : convertir avec sips -s format jpeg)' : ''}.`);
+  toast(`${names.length} photo(s) ajoutée(s)${skipped.length ? `, ${skipped.length} ignorée(s)` : ''}${heic ? ' (HEIC non lus : glisser plutôt leur dossier sur la page pour obtenir la commande de conversion)' : ''}.`);
   if (!countTouched) genCount.value = String(lib.photos.size || 30);
 }
 
