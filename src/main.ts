@@ -5,7 +5,8 @@ import { DEFAULT_MIN_AREA_FRAC } from './layout/generate';
 import { Library } from './photos/library';
 import {
   ensurePermission, hasFsAccess, loadLocal, loadPresets, newDoc, pickFolder, PROJECT_FILE, readEntryFiles, readFileList, readFolder,
-  recallHandle, rememberHandle, saveLocal, savePresets, writeFile, type FolderContent,
+  currentProject, forgetRecent, listRecent, rememberHandle, saveLocal, savePresets, setCurrentProject, writeFile,
+  type FolderContent, type RecentProject,
 } from './project';
 import { Editor, PHOTO_MIME } from './render/editor';
 import { download, layoutSvg, pxForPrint, renderCanvas, toImageBlob, toPdfBlob } from './render/export';
@@ -15,7 +16,9 @@ import type { BspNode, Doc, FormatPreset } from './types';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const num = (id: string) => Number($<HTMLInputElement>(id).value);
 
-const saved = loadLocal();
+// Chaque onglet a son projet (sessionStorage) et sa copie de secours : plusieurs projets en parallèle.
+let project = currentProject();
+const saved = loadLocal(project) ?? loadLocal();
 const store = new Store(saved ?? newDoc());
 const lib = new Library();
 const editor = new Editor($('stage'), store, lib);
@@ -45,13 +48,22 @@ function updateHelp() {
 // ------------------------------------------------------------------ sauvegarde
 
 let saveTimer = 0;
-store.subscribe((doc) => {
+let savePending = false;
+store.subscribe(() => {
   clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => save(doc), 600);
+  savePending = true;
+  saveTimer = window.setTimeout(() => save(store.doc), 600);
 });
 
+async function flushSave() {
+  if (!savePending) return;
+  clearTimeout(saveTimer);
+  await save(store.doc);
+}
+
 async function save(doc: Doc) {
-  saveLocal(doc);
+  savePending = false;
+  saveLocal(doc, project);
   if (!folder) return;
   try {
     await writeFile(folder, PROJECT_FILE, JSON.stringify(doc, null, 1));
@@ -103,11 +115,15 @@ $('btn-heic-close').onclick = () => ($('heic-box').hidden = true);
 
 /** Charge le contenu d'un dossier. `handle` est null en mode repli (sans accès en écriture). */
 async function loadProject(name: string, content: FolderContent, handle: unknown | null) {
+  await flushSave(); // le projet précédent est enregistré avant de basculer
   folder = handle;
+  project = name;
+  setCurrentProject(name);
   const status = $('project-status');
   status.textContent = `${name} · chargement…`;
   lib.clear();
-  if (content.doc) store.replace(content.doc);
+  store.replace(content.doc ?? newDoc(store.doc.settings));
+  renderRecent();
   await lib.addFiles(content.images, (d, t) => (status.textContent = `${name} · photos ${d}/${t}`));
   status.textContent = handle ? `${name}/${PROJECT_FILE}` : `${name} · sauvegarde dans le navigateur uniquement`;
   showHeicHelp(name, content.heic);
@@ -148,7 +164,6 @@ $('btn-open').onclick = async () => {
   try {
     const handle = await pickFolder();
     await rememberHandle(handle);
-    $('btn-reopen').hidden = true;
     await loadProject(handle.name, await readFolder(handle), handle);
   } catch (e) {
     if ((e as Error).name !== 'AbortError') toast(`Ouverture impossible : ${(e as Error).message}`, 12000);
@@ -186,7 +201,6 @@ async function openDropped(handleP: Promise<any> | null, entry: FileSystemDirect
     const handle = handleP ? await handleP : null;
     if (handle?.kind === 'directory' && (await ensurePermission(handle))) {
       await rememberHandle(handle);
-      $('btn-reopen').hidden = true;
       await loadProject(handle.name, await readFolder(handle), handle);
       return;
     }
@@ -207,21 +221,55 @@ $<HTMLInputElement>('dir-input').onchange = async (e) => {
   await loadProject(name, await readFileList(files), null);
 };
 
-recallHandle().then((h) => {
-  if (!h) return;
-  const b = $<HTMLButtonElement>('btn-reopen');
-  b.hidden = false;
-  b.textContent = `Rouvrir « ${h.name} »`;
-  b.onclick = async () => {
-    try {
-      if (!(await ensurePermission(h))) { toast('Accès au dossier refusé.'); return; }
-      b.hidden = true;
-      await loadProject(h.name, await readFolder(h), h);
-    } catch (e) {
-      toast(`Impossible de rouvrir « ${h.name} » : ${(e as Error).message}. Utiliser « Ouvrir un dossier ».`, 12000);
-    }
-  };
-});
+// ------------------------------------------------------------------ projets récents
+
+function ago(t: number): string {
+  if (!t) return '';
+  const d = Math.round((Date.now() - t) / 86400000);
+  if (d <= 0) return 'aujourd’hui';
+  if (d === 1) return 'hier';
+  if (d < 30) return `il y a ${d} j`;
+  return new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+async function renderRecent() {
+  const list = await listRecent();
+  const box = $('recent');
+  box.replaceChildren(...list.map((p) => {
+    const row = document.createElement('div');
+    const isCurrent = p.name === project && !!folder;
+    row.className = `recent-item${isCurrent ? ' current' : ''}`;
+    const open = document.createElement('button');
+    open.className = 'recent-open';
+    open.title = isCurrent ? `${p.name} (projet ouvert) — cliquer pour le recharger` : `Ouvrir « ${p.name} »`;
+    const label = document.createElement('span');
+    label.className = 'recent-name';
+    label.textContent = p.name;
+    const when = document.createElement('span');
+    when.className = 'recent-date';
+    when.textContent = isCurrent ? 'ouvert' : ago(p.opened);
+    open.append(label, when);
+    open.onclick = () => reopenRecent(p);
+    const forget = document.createElement('button');
+    forget.className = 'recent-forget';
+    forget.textContent = '×';
+    forget.title = 'Retirer de la liste (le dossier et ses photos ne sont pas touchés)';
+    forget.onclick = async () => { await forgetRecent(p.name); renderRecent(); };
+    row.append(open, forget);
+    return row;
+  }));
+  $('recent-block').hidden = !list.length;
+}
+
+async function reopenRecent(p: RecentProject) {
+  try {
+    if (!(await ensurePermission(p.handle))) { toast('Accès au dossier refusé.'); return; }
+    await rememberHandle(p.handle);
+    await loadProject(p.name, await readFolder(p.handle), p.handle);
+  } catch (e) {
+    toast(`Impossible d’ouvrir « ${p.name} » : ${(e as Error).message}. Le dossier a peut-être été déplacé ou renommé : le glisser à nouveau sur la page.`, 12000);
+  }
+}
 
 // ------------------------------------------------------------------ format & tailles préférées
 
@@ -529,4 +577,9 @@ if (!saved) {
   // toute première ouverture : une mise en page d'exemple pour voir tout de suite le principe
   generateLayout(true);
   store.replace(store.doc);
+}
+renderRecent();
+if (project) {
+  // onglet rechargé : le montage est là, mais Chrome demande un clic pour relire les photos du dossier
+  $('project-status').textContent = `${project} · cliquer sur le projet ci-dessous pour recharger ses photos`;
 }

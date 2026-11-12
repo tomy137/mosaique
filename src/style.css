@@ -60,7 +60,20 @@ h2 .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .hint { margin: 6px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
 code { font-size: 11px; background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
 
+h3 { margin: 12px 0 6px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.recent { display: flex; flex-direction: column; gap: 4px; }
+.recent-item { display: flex; gap: 4px; }
+.recent-open {
+  flex: 1; min-width: 0; justify-content: space-between; gap: 8px; text-align: left;
+}
+.recent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.recent-date { flex: none; font-size: 11px; color: var(--muted); }
+.recent-item.current .recent-open { border-color: var(--accent); background: rgba(200, 64, 47, 0.14); }
+.recent-item.current .recent-date { color: var(--accent-2); }
+.recent-forget { flex: none; width: 28px; padding: 0; color: var(--muted); }
+
 .row { display: flex; gap: 6px; margin-top: 6px; align-items: end; }
+.row > button, .row > .button { overflow: hidden; text-overflow: ellipsis; }
 .row > * { flex: 1; min-width: 0; }
 .row.three > * { flex: 1 1 0; }
 

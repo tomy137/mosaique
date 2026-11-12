@@ -32,16 +32,29 @@ export function parseDoc(text: string): Doc {
 
 const LS_DOC = 'mosaique.doc';
 const LS_PRESETS = 'mosaique.presets';
+const SS_CURRENT = 'mosaique.current';
 
-export function saveLocal(doc: Doc): void {
-  try { localStorage.setItem(LS_DOC, JSON.stringify(doc)); } catch { /* stockage indisponible */ }
+/** Copie de secours, une par projet (projet = nom du dossier ; '' = montage hors dossier). */
+const docKey = (project: string) => (project ? `${LS_DOC}:${project}` : LS_DOC);
+
+export function saveLocal(doc: Doc, project = ''): void {
+  try { localStorage.setItem(docKey(project), JSON.stringify(doc)); } catch { /* stockage indisponible */ }
 }
 
-export function loadLocal(): Doc | null {
+export function loadLocal(project = ''): Doc | null {
   try {
-    const t = localStorage.getItem(LS_DOC);
+    const t = localStorage.getItem(docKey(project));
     return t ? parseDoc(t) : null;
   } catch { return null; }
+}
+
+/** Projet ouvert dans cet onglet (chaque onglet peut avoir le sien). */
+export function currentProject(): string {
+  try { return sessionStorage.getItem(SS_CURRENT) ?? ''; } catch { return ''; }
+}
+
+export function setCurrentProject(name: string): void {
+  try { sessionStorage.setItem(SS_CURRENT, name); } catch { /* ignore */ }
 }
 
 // ---------- tailles préférées ----------
@@ -86,27 +99,66 @@ function idb(): Promise<IDBDatabase> {
   });
 }
 
+export interface RecentProject { name: string; handle: DirHandle; opened: number }
+
+const RECENT_PREFIX = 'p:';
+const RECENT_MAX = 12;
+
+async function idbAll(): Promise<{ key: string; value: any }[]> {
+  const db = await idb();
+  return new Promise((res) => {
+    const out: { key: string; value: any }[] = [];
+    const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).openCursor();
+    req.onsuccess = () => {
+      const c = req.result;
+      if (!c) { res(out); return; }
+      out.push({ key: String(c.key), value: c.value });
+      c.continue();
+    };
+    req.onerror = () => res(out);
+  });
+}
+
+async function idbWrite(fn: (store: IDBObjectStore) => void): Promise<void> {
+  const db = await idb();
+  await new Promise<void>((res, rej) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    fn(tx.objectStore(IDB_STORE));
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+/** Projets récents, du plus récent au plus ancien. */
+export async function listRecent(): Promise<RecentProject[]> {
+  try {
+    const all = await idbAll();
+    const legacy = all.find((e) => e.key === 'last');
+    if (legacy?.value?.name) {
+      // ancienne version : un seul dossier mémorisé
+      await idbWrite((s) => {
+        s.put({ handle: legacy.value, opened: 0 }, RECENT_PREFIX + legacy.value.name);
+        s.delete('last');
+      });
+      return listRecent();
+    }
+    return all
+      .filter((e) => e.key.startsWith(RECENT_PREFIX) && e.value?.handle)
+      .map((e) => ({ name: e.key.slice(RECENT_PREFIX.length), handle: e.value.handle, opened: e.value.opened ?? 0 }))
+      .sort((a, b) => b.opened - a.opened);
+  } catch { return []; }
+}
+
 export async function rememberHandle(handle: DirHandle): Promise<void> {
   try {
-    const db = await idb();
-    await new Promise<void>((res, rej) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).put(handle, 'last');
-      tx.oncomplete = () => res();
-      tx.onerror = () => rej(tx.error);
-    });
+    await idbWrite((s) => s.put({ handle, opened: Date.now() }, RECENT_PREFIX + handle.name));
+    const extra = (await listRecent()).slice(RECENT_MAX);
+    if (extra.length) await idbWrite((s) => extra.forEach((p) => s.delete(RECENT_PREFIX + p.name)));
   } catch { /* ignore */ }
 }
 
-export async function recallHandle(): Promise<DirHandle | null> {
-  try {
-    const db = await idb();
-    return await new Promise((res) => {
-      const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).get('last');
-      req.onsuccess = () => res(req.result ?? null);
-      req.onerror = () => res(null);
-    });
-  } catch { return null; }
+export async function forgetRecent(name: string): Promise<void> {
+  try { await idbWrite((s) => s.delete(RECENT_PREFIX + name)); } catch { /* ignore */ }
 }
 
 export async function pickFolder(): Promise<DirHandle> {
