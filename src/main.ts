@@ -1,10 +1,10 @@
 import './style.css';
-import { leafIds, scaleTree } from './geometry/bsp';
+import { scaleTree } from './geometry/bsp';
 import { applyGenerate, fillEmpty } from './layout/edit';
 import { Library } from './photos/library';
 import {
-  ensurePermission, hasFsAccess, loadLocal, loadPresets, newDoc, pickFolder, PROJECT_FILE, readFolder,
-  recallHandle, rememberHandle, saveLocal, savePresets, writeFile,
+  ensurePermission, hasFsAccess, loadLocal, loadPresets, newDoc, pickFolder, PROJECT_FILE, readFileList, readFolder,
+  recallHandle, rememberHandle, saveLocal, savePresets, writeFile, type FolderContent,
 } from './project';
 import { Editor, PHOTO_MIME } from './render/editor';
 import { download, layoutSvg, pxForPrint, renderCanvas, toImageBlob, toPdfBlob } from './render/export';
@@ -62,30 +62,62 @@ async function save(doc: Doc) {
 
 // ------------------------------------------------------------------ dossier de projet
 
-async function openFolder(handle: unknown) {
+const HEIC_HINT = 'Pour les convertir dans le Terminal : sips -s format jpeg *.HEIC --out .';
+
+/** Charge le contenu d'un dossier. `handle` est null en mode repli (sans accès en écriture). */
+async function loadProject(name: string, content: FolderContent, handle: unknown | null) {
   folder = handle;
-  await rememberHandle(handle);
-  $('btn-reopen').hidden = true;
-  $('project-status').textContent = `${folder.name} · chargement…`;
-  const content = await readFolder(folder);
+  const status = $('project-status');
+  status.textContent = `${name} · chargement…`;
   lib.clear();
   if (content.doc) store.replace(content.doc);
-  await lib.addFiles(content.images, (d, t) => ($('project-status').textContent = `${folder.name} · photos ${d}/${t}`));
-  $('project-status').textContent = `${folder.name}/${PROJECT_FILE}`;
+  await lib.addFiles(content.images, (d, t) => (status.textContent = `${name} · photos ${d}/${t}`));
+  status.textContent = handle ? `${name}/${PROJECT_FILE}` : `${name} · sauvegarde dans le navigateur uniquement`;
+
+  if (!lib.photos.size) {
+    toast(content.heic.length
+      ? `Aucune photo lisible dans « ${name} » : ${content.heic.length} photo(s) HEIC, que Chrome ne sait pas lire. ${HEIC_HINT}`
+      : `Aucune photo (JPEG, PNG, WebP…) trouvée dans « ${name} ».`, 20000);
+    return;
+  }
+  let msg: string;
   if (!content.doc) {
-    // nouveau projet : une case par photo pour démarrer
-    syncInputs();
-    if (lib.photos.size && leafIds(store.doc.root).length <= 1) generateLayout(false);
-    else save(store.doc);
+    // nouveau projet : une case par photo, photos placées
+    genCount.value = String(lib.photos.size);
+    countTouched = false;
+    generateLayout(true);
+    msg = `${lib.photos.size} photo(s) chargée(s) et placée(s). « Variante » (⇧G) pour une autre mise en page.`;
+  } else {
+    msg = `Montage « ${name} » rouvert : ${lib.photos.size} photo(s).`;
   }
-  if (content.heic.length) {
-    toast(`${content.heic.length} photo(s) HEIC ignorée(s). Les convertir : sips -s format jpeg *.HEIC --out .`, 12000);
-  }
+  if (content.heic.length) msg += ` ${content.heic.length} photo(s) HEIC ignorée(s). ${HEIC_HINT}`;
+  if (!handle) msg += ' Ce navigateur ne peut pas écrire dans le dossier : le montage est gardé dans le navigateur (Chrome l’enregistre dans le dossier).';
+  toast(msg, content.heic.length || !handle ? 20000 : 8000);
 }
 
 $('btn-open').onclick = async () => {
-  if (!hasFsAccess()) { toast('Ce navigateur ne gère pas l’ouverture de dossier : utiliser Chrome, ou « Ajouter… ».'); return; }
-  try { await openFolder(await pickFolder()); } catch (e) { if ((e as Error).name !== 'AbortError') toast((e as Error).message); }
+  if (!hasFsAccess()) {
+    // Safari, Firefox, Brave… : choix de dossier classique, sans écriture dans le dossier
+    $<HTMLInputElement>('dir-input').click();
+    return;
+  }
+  try {
+    const handle = await pickFolder();
+    await rememberHandle(handle);
+    $('btn-reopen').hidden = true;
+    await loadProject(handle.name, await readFolder(handle), handle);
+  } catch (e) {
+    if ((e as Error).name !== 'AbortError') toast(`Ouverture impossible : ${(e as Error).message}`, 12000);
+  }
+};
+
+$<HTMLInputElement>('dir-input').onchange = async (e) => {
+  const input = e.target as HTMLInputElement;
+  const files = [...(input.files ?? [])];
+  input.value = '';
+  if (!files.length) return;
+  const name = files[0].webkitRelativePath.split('/')[0] || 'dossier';
+  await loadProject(name, await readFileList(files), null);
 };
 
 recallHandle().then((h) => {
@@ -94,8 +126,13 @@ recallHandle().then((h) => {
   b.hidden = false;
   b.textContent = `Rouvrir « ${h.name} »`;
   b.onclick = async () => {
-    if (await ensurePermission(h)) await openFolder(h);
-    else toast('Accès au dossier refusé.');
+    try {
+      if (!(await ensurePermission(h))) { toast('Accès au dossier refusé.'); return; }
+      b.hidden = true;
+      await loadProject(h.name, await readFolder(h), h);
+    } catch (e) {
+      toast(`Impossible de rouvrir « ${h.name} » : ${(e as Error).message}. Utiliser « Ouvrir un dossier ».`, 12000);
+    }
   };
 });
 

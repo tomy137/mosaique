@@ -138,6 +138,21 @@ export async function readFolder(handle: DirHandle): Promise<FolderContent> {
   return { images, heic, doc };
 }
 
+/** Mode repli (navigateurs sans File System Access) : fichiers d'un <input webkitdirectory>, premier niveau seulement. */
+export async function readFileList(files: File[]): Promise<FolderContent> {
+  const images: File[] = [];
+  const heic: string[] = [];
+  let doc: Doc | null = null;
+  for (const f of files) {
+    if (f.webkitRelativePath.split('/').length > 2) continue; // sous-dossiers ignorés, comme en mode Chrome
+    if (f.name === PROJECT_FILE) {
+      try { doc = parseDoc(await f.text()); } catch { /* ignoré */ }
+    } else if (isImageName(f.name)) images.push(f);
+    else if (isHeicName(f.name)) heic.push(f.name);
+  }
+  return { images, heic, doc };
+}
+
 export async function writeFile(handle: DirHandle, name: string, data: Blob | string): Promise<void> {
   const fh = await handle.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
