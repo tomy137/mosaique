@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.envrc
+.claude/
+issues
+*.log
+.DS_Store
