@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mosaïque</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23b8322a'/><path d='M4 4h11l-3 12H4zM17 4h11v9H15zM4 18h7l-2 10H4zM13 18h15v10H11z' fill='%23fff'/></svg>" />
+  </head>
+  <body>
+    <aside id="sidebar">
+      <header class="brand">
+        <span class="logo"></span>
+        <div>
+          <h1>Mosaïque</h1>
+          <p id="project-status" class="muted">Projet non enregistré dans un dossier</p>
+        </div>
+      </header>
+
+      <section>
+        <h2>Projet</h2>
+        <div class="row">
+          <button id="btn-open" title="Ouvrir un dossier contenant les photos (O)">Ouvrir un dossier <kbd>O</kbd></button>
+          <button id="btn-reopen" hidden></button>
+        </div>
+        <p class="hint">Le dossier contient les photos ; le montage y est enregistré dans <code>montage.json</code>.</p>
+      </section>
+
+      <section>
+        <h2>Format</h2>
+        <label class="field">Tailles préférées
+          <select id="preset"></select>
+        </label>
+        <div class="row three">
+          <label class="field">Largeur (cm)<input id="w" type="number" step="0.5" min="5" /></label>
+          <label class="field">Hauteur (cm)<input id="h" type="number" step="0.5" min="5" /></label>
+          <label class="field">dpi<input id="dpi" type="number" step="10" min="72" /></label>
+        </div>
+        <div class="row">
+          <button id="btn-rotate" title="Passer en portrait / paysage">⇄ Orientation</button>
+          <button id="btn-preset-del" title="Retirer cette taille des tailles préférées">Retirer</button>
+        </div>
+        <div class="row">
+          <input id="preset-name" type="text" placeholder="Nom (ex. Calendrier mamie)" />
+          <button id="btn-preset-save" title="Enregistrer le format courant comme taille préférée">★ Enregistrer</button>
+        </div>
+        <div class="row three">
+          <label class="field">Gouttière (mm)<input id="gutter" type="number" step="0.5" min="0" /></label>
+          <label class="field">Marge (mm)<input id="margin" type="number" step="0.5" min="0" /></label>
+          <label class="field">Fond<input id="bg" type="color" /></label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Mise en page</h2>
+        <div class="row three">
+          <label class="field">Cases<input id="gen-count" type="number" min="1" max="120" /></label>
+          <label class="field">Obliquité<input id="gen-angle" type="range" min="0" max="20" step="1" /></label>
+          <label class="field">Part oblique<input id="gen-share" type="range" min="0" max="100" step="5" /></label>
+        </div>
+        <div class="row">
+          <button id="btn-gen" class="primary" title="Générer une mise en page (G)">Générer <kbd>G</kbd></button>
+          <button id="btn-variant" title="Autre variante avec les mêmes réglages (⇧G)">Variante <kbd>⇧G</kbd></button>
+        </div>
+        <div class="row">
+          <button id="btn-fill" title="Placer les photos non utilisées dans les cases vides (F)">Remplir les vides <kbd>F</kbd></button>
+          <button id="btn-blank" title="Repartir d'une page vide">Page vide</button>
+        </div>
+        <p class="hint" id="gen-info"></p>
+      </section>
+
+      <section class="grow">
+        <h2>Photos <span id="photo-count" class="muted"></span></h2>
+        <div class="row">
+          <label class="button" title="Ajouter des photos (A)">Ajouter… <kbd>A</kbd><input id="file-input" type="file" accept="image/*" multiple hidden /></label>
+        </div>
+        <div id="library" class="library"></div>
+      </section>
+
+      <section>
+        <h2>Export</h2>
+        <p class="hint" id="export-info"></p>
+        <div class="row three">
+          <button id="btn-jpg" title="JPEG pleine résolution (E)">JPEG <kbd>E</kbd></button>
+          <button id="btn-pdf" title="PDF à la taille d'impression">PDF</button>
+          <button id="btn-png" title="PNG pleine résolution (lourd)">PNG</button>
+        </div>
+        <div class="row">
+          <label class="field inline">Écran<input id="screen-w" type="number" min="400" step="100" /> px</label>
+          <button id="btn-screen" title="JPEG léger pour écran / messagerie">JPEG écran</button>
+        </div>
+        <div class="row"><button id="btn-svg" title="Tracé des cases seul, pour Illustrator">Tracé SVG (Illustrator)</button></div>
+      </section>
+    </aside>
+
+    <main>
+      <div id="toolbar">
+        <div class="group">
+          <button id="mode-select" class="tool" title="Sélection, déplacement des photos et des coupes (V)">↖ Sélection <kbd>V</kbd></button>
+          <button id="mode-cut" class="tool" title="Couper une case (C)">✂ Couper <kbd>C</kbd></button>
+        </div>
+        <div class="group">
+          <button id="btn-undo" title="Annuler (⌘Z)">↶ <kbd>⌘Z</kbd></button>
+          <button id="btn-redo" title="Rétablir (⇧⌘Z)">↷ <kbd>⇧⌘Z</kbd></button>
+        </div>
+        <div class="group" id="context"></div>
+      </div>
+      <div id="stage"></div>
+      <footer id="statusbar"><span id="help"></span><span id="toast"></span></footer>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
