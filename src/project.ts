@@ -24,8 +24,12 @@ export const newDoc = (settings: Settings = DEFAULT_SETTINGS): Doc => ({
 
 export function parseDoc(text: string): Doc {
   const d = JSON.parse(text);
-  if (d?.version !== 1 || !d.root || !d.settings) throw new Error('Fichier montage.json invalide');
-  return { version: 1, settings: { ...DEFAULT_SETTINGS, ...d.settings }, root: d.root, crops: d.crops ?? {} };
+  if (d?.version !== 1 || !d.root || !d.settings) throw new Error('Ce fichier n’est pas un montage Mosaïque');
+  const doc: Doc = { version: 1, settings: { ...DEFAULT_SETTINGS, ...d.settings }, root: d.root, crops: d.crops ?? {} };
+  if (typeof d.name === 'string') doc.name = d.name;
+  if (typeof d.createdAt === 'number') doc.createdAt = d.createdAt;
+  if (typeof d.updatedAt === 'number') doc.updatedAt = d.updatedAt;
+  return doc;
 }
 
 // ---------- stockage navigateur (toujours protégé : peut être indisponible) ----------
@@ -48,13 +52,48 @@ export function loadLocal(project = ''): Doc | null {
   } catch { return null; }
 }
 
-/** Projet ouvert dans cet onglet (chaque onglet peut avoir le sien). */
+/** Clé de la copie de secours d'un montage : dossier + fichier du montage. */
+export const montageKey = (project: string, file: string) => (project && file ? `${project}/${file}` : project);
+
+/** Copies de secours des montages d'un dossier : { fichier du montage → document }. */
+export function listLocalMontages(project: string): { file: string; doc: Doc }[] {
+  const out: { file: string; doc: Doc }[] = [];
+  try {
+    const prefix = `${docKey(project)}/`;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith(prefix)) continue;
+      try { out.push({ file: k.slice(prefix.length), doc: parseDoc(localStorage.getItem(k) ?? '') }); } catch { /* ignoré */ }
+    }
+  } catch { /* stockage indisponible */ }
+  return out;
+}
+
+/** Retire la copie de secours d'un montage (après suppression ou renommage). */
+export function removeLocal(key: string): void {
+  try { localStorage.removeItem(docKey(key)); } catch { /* ignore */ }
+}
+
+/** Ancienne copie de secours (un seul montage par dossier), à récupérer puis retirer. */
+export function dropLocal(project: string): void {
+  try { localStorage.removeItem(docKey(project)); } catch { /* ignore */ }
+}
+
+/** Dossier et montage ouverts dans cet onglet (chaque onglet peut avoir les siens). */
 export function currentProject(): string {
   try { return sessionStorage.getItem(SS_CURRENT) ?? ''; } catch { return ''; }
 }
 
 export function setCurrentProject(name: string): void {
   try { sessionStorage.setItem(SS_CURRENT, name); } catch { /* ignore */ }
+}
+
+export function currentMontageFile(): string {
+  try { return sessionStorage.getItem(`${SS_CURRENT}.montage`) ?? ''; } catch { return ''; }
+}
+
+export function setCurrentMontageFile(file: string): void {
+  try { sessionStorage.setItem(`${SS_CURRENT}.montage`, file); } catch { /* ignore */ }
 }
 
 // ---------- tailles préférées ----------

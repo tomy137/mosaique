@@ -31,6 +31,10 @@ export interface Doc {
   settings: Settings;
   root: BspNode;
   crops: Record<string, Crop>;
+  /** Nom du montage (plusieurs montages par dossier). */
+  name?: string;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface FormatPreset {

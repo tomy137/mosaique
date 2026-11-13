@@ -17,20 +17,42 @@
       </header>
 
       <section>
-        <h2>Projet</h2>
+        <h2>Dossier de photos</h2>
         <div class="row">
           <button id="btn-open" title="Ouvrir un dossier contenant les photos (O)">Ouvrir un dossier <kbd>O</kbd></button>
           <input id="dir-input" type="file" webkitdirectory multiple hidden />
         </div>
         <div class="row">
-          <button id="btn-allow" class="primary" hidden title="Chrome demande une fois la permission d'écrire montage.json dans ce dossier">Autoriser l'enregistrement dans le dossier</button>
+          <button id="btn-allow" class="primary" hidden title="Chrome demande une fois la permission d'écrire dans ce dossier">Autoriser l'enregistrement dans le dossier</button>
         </div>
-        <p class="hint">Ou <b>glisser le dossier depuis le Finder</b> n'importe où sur la page. Le dossier contient les photos ; le montage y est enregistré dans <code>montage.json</code>.</p>
+        <p class="hint">Ou <b>glisser le dossier depuis le Finder</b> n'importe où sur la page. Les montages sont enregistrés dans le sous-dossier <code>mosaique-montages</code>.</p>
         <div id="recent-block" hidden>
-          <h3>Projets récents</h3>
+          <h3>Dossiers récents</h3>
           <div id="recent" class="recent"></div>
-          <p class="hint">Un onglet par projet pour en mener plusieurs en parallèle.</p>
+          <p class="hint">Un onglet par montage pour en mener plusieurs en parallèle.</p>
         </div>
+      </section>
+
+      <section>
+        <h2>Montage</h2>
+        <div class="row">
+          <input id="montage-name" type="text" placeholder="Nom du montage" title="Renommer le montage (Entrée pour valider)" />
+          <button id="btn-save" title="Enregistrer maintenant, avec une copie dans l'historique (⌘S)">Enregistrer <kbd>⌘S</kbd></button>
+        </div>
+        <div id="montage-list" class="montage-list"></div>
+        <div class="row three">
+          <button id="btn-m-new" title="Nouveau montage avec les photos pas encore utilisées (N)">+ Nouveau <kbd>N</kbd></button>
+          <button id="btn-m-dup" title="Enregistrer une copie de ce montage">Dupliquer</button>
+          <button id="btn-m-del" title="Supprimer ce montage (gardé dans la corbeille du dossier)">Supprimer</button>
+        </div>
+        <div class="row">
+          <button id="btn-m-json" title="Exporter le montage seul (.json)">Exporter .json</button>
+          <button id="btn-m-zip" title="Exporter le montage avec ses photos originales (.zip)">Exporter .zip</button>
+        </div>
+        <div class="row">
+          <label class="button" title="Importer un montage .json ou .zip (ou le glisser sur la page)">Importer un montage…<input id="import-input" type="file" accept=".json,.zip,application/json,application/zip" hidden /></label>
+        </div>
+        <p class="hint" id="montage-info"></p>
       </section>
 
       <section>
@@ -68,6 +90,9 @@
         <div class="row">
           <label class="field" title="Surface minimale d'une case, par rapport à la case moyenne">Taille min. des cases<input id="gen-min" type="range" min="0" max="80" step="5" /></label>
         </div>
+        <label class="check" title="Générer et « Remplir les vides » n'utilisent pas les photos déjà placées dans un autre montage du dossier">
+          <input id="gen-exclude" type="checkbox" checked /> Éviter les photos des autres montages
+        </label>
         <div class="row">
           <button id="btn-gen" class="primary" title="Générer une mise en page (G)">Générer <kbd>G</kbd></button>
           <button id="btn-variant" title="Autre variante avec les mêmes réglages (⇧G)">Variante <kbd>⇧G</kbd></button>
@@ -92,6 +117,12 @@
             <button id="btn-heic-close">Masquer</button>
           </div>
           <p class="hint" id="heic-after"></p>
+        </div>
+        <div class="lib-filter" id="lib-filter">
+          <button data-f="all" class="active">Toutes</button>
+          <button data-f="free" title="Utilisées dans aucun montage">Libres</button>
+          <button data-f="here" title="Placées dans ce montage">Ce montage</button>
+          <button data-f="elsewhere" title="Placées dans un autre montage du dossier">Autres montages</button>
         </div>
         <div id="library" class="library"></div>
       </section>
@@ -122,9 +153,13 @@
           <button id="btn-undo" title="Annuler (⌘Z)">↶ <kbd>⌘Z</kbd></button>
           <button id="btn-redo" title="Rétablir (⇧⌘Z)">↷ <kbd>⇧⌘Z</kbd></button>
         </div>
+        <div class="group">
+          <button id="btn-present" title="Plein écran : le montage seul, sans les panneaux (P, Échap pour revenir)">⛶ Plein écran <kbd>P</kbd></button>
+        </div>
         <div class="group" id="context"></div>
       </div>
       <div id="stage"></div>
+      <button id="exit-presentation" hidden title="Quitter le plein écran (Échap)">✕ Quitter le plein écran</button>
       <footer id="statusbar"><span id="help"></span><div id="toast" role="status" hidden><span id="toast-msg"></span><button id="toast-close" title="Fermer (Échap)" aria-label="Fermer">×</button></div></footer>
     </main>
 

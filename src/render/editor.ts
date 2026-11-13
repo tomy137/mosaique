@@ -25,7 +25,7 @@ type Drag =
   | { t: 'cut-end'; id: string; end: 0 | 1; fixed: Pt; parent: Poly }
   | { t: 'draw'; start: Pt; cur: Pt; sx: number; sy: number };
 
-interface CellEls { g: SVGGElement; clip: SVGPolygonElement; base: SVGPolygonElement; img: SVGImageElement; warn: SVGGElement }
+interface CellEls { g: SVGGElement; clip: SVGPolygonElement; base: SVGPolygonElement; img: SVGImageElement; warn: SVGGElement; dup: SVGGElement }
 
 function el<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number> = {}, parent?: Element): SVGElementTagNameMap[K] {
   const e = document.createElementNS(NS, tag);
@@ -56,6 +56,10 @@ export class Editor {
   onToast?: (msg: string) => void;
   /** Fichiers déposés depuis le Finder (avec la case visée, si une seule photo). */
   onDropFiles?: (files: File[], cellId: string | null) => void;
+  /** Autres montages du dossier qui utilisent cette photo (pastille orange sur la case). */
+  usedElsewhere?: (photo: string) => string[];
+  /** Une photo vient d'être placée dans une case (pour avertir si elle sert déjà ailleurs). */
+  onPhotoPlaced?: (photo: string) => void;
 
   constructor(host: HTMLElement, private store: Store, private lib: Library) {
     this.svg = el('svg', { class: 'editor', preserveAspectRatio: 'xMidYMid meet' });
@@ -123,16 +127,27 @@ export class Editor {
         const low = dpi < LOW_DPI;
         e.warn.style.display = low ? '' : 'none';
         if (low) {
-          e.warn.setAttribute('transform', `translate(${bb.x + badge * 1.6} ${bb.y + badge * 1.6})`);
+          e.warn.setAttribute('transform', badgeAt(poly, -1, badge));
           const c = e.warn.querySelector('circle')!;
           c.setAttribute('r', String(badge));
           const t = e.warn.querySelector('text')!;
           t.setAttribute('font-size', String(badge * 1.4));
           e.warn.querySelector('title')!.textContent = `Résolution faible à l'impression : ${Math.round(dpi)} dpi`;
         }
+        const others = this.usedElsewhere?.(crop.photo) ?? [];
+        e.dup.style.display = others.length ? '' : 'none';
+        if (others.length) {
+          e.dup.setAttribute('transform', badgeAt(poly, 1, badge));
+          e.dup.querySelector('circle')!.setAttribute('r', String(badge));
+          const t = e.dup.querySelector('text')!;
+          t.setAttribute('font-size', String(badge * 1.25));
+          t.textContent = String(others.length + 1);
+          e.dup.querySelector('title')!.textContent = `Photo aussi utilisée dans : ${others.map((n) => `« ${n} »`).join(', ')}`;
+        }
       } else {
         e.img.style.display = 'none';
         e.warn.style.display = 'none';
+        e.dup.style.display = 'none';
       }
     }
     for (const [id, e] of this.els) {
@@ -153,7 +168,11 @@ export class Editor {
     const t = el('text', { x: 0, y: 0, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, warn);
     t.textContent = '!';
     el('title', {}, warn);
-    const e = { g, clip, base, img, warn };
+    const dup = el('g', { class: 'dup' }, g);
+    el('circle', { cx: 0, cy: 0 }, dup);
+    el('text', { x: 0, y: 0, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, dup);
+    el('title', {}, dup);
+    const e = { g, clip, base, img, warn, dup };
     this.els.set(id, e);
     return e;
   }
@@ -425,6 +444,7 @@ export class Editor {
     const name = e.dataTransfer?.getData(PHOTO_MIME);
     if (name && id) {
       this.store.change((d) => { d.crops[id] = defaultCrop(name); });
+      this.onPhotoPlaced?.(name);
       this.sel = { kind: 'cell', id };
       this.onUi?.();
     } else if (e.dataTransfer?.files.length) {
@@ -484,3 +504,16 @@ export class Editor {
 }
 
 const clipId = (id: string) => `clip-${id.replace(/\./g, '_')}`;
+
+/**
+ * Position d'une pastille dans le coin haut-gauche (side = -1) ou haut-droit (side = 1) de la case,
+ * ramenée vers l'intérieur : elle reste dans la case même quand ses bords sont obliques.
+ */
+function badgeAt(poly: Poly, side: -1 | 1, r: number): string {
+  const corner = poly.reduce((best, p) => (side * p.x - p.y > side * best.x - best.y ? p : best), poly[0]);
+  const c = poly.reduce((acc, p) => add(acc, mul(p, 1 / poly.length)), { x: 0, y: 0 });
+  const d = sub(c, corner);
+  const l = len(d) || 1;
+  const at = add(corner, mul(d, Math.min(r * 2.6, l * 0.5) / l));
+  return `translate(${at.x} ${at.y})`;
+}

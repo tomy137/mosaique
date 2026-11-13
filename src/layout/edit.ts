@@ -82,10 +82,10 @@ export function quickCut(cells: Cells, leafId: string, at: Pt): Cut | null {
 }
 
 /** Remplit les cases vides avec les photos non utilisées, en appariant les ratios. */
-export function fillEmpty(doc: Doc, lib: Library): number {
+export function fillEmpty(doc: Doc, lib: Library, exclude: Set<string> = new Set()): number {
   const cells = computeCells(doc.root, doc.settings);
   const used = new Set(Object.values(doc.crops).map((c) => c.photo));
-  const free = [...lib.photos.values()].filter((p) => !used.has(p.name));
+  const free = [...lib.photos.values()].filter((p) => !used.has(p.name) && !exclude.has(p.name));
   const empty = [...cells.insets.entries()].filter(([id, p]) => p.length >= 3 && !doc.crops[id]);
   if (!free.length || !empty.length) return 0;
   const cellAspect = empty.map(([id, p]) => { const b = bbox(p); return { id, a: b.w / b.h }; });
@@ -109,8 +109,18 @@ export function fillEmpty(doc: Doc, lib: Library): number {
 export interface GenerateParams { count: number; seed: number; obliquityDeg: number; obliqueShare: number; minAreaFrac: number }
 
 /** Génère une mise en page. Avec des photos : une case par photo, placées automatiquement. */
-export function applyGenerate(doc: Doc, lib: Library, g: GenerateParams): void {
-  const photos = [...lib.photos.values()].slice(0, g.count);
+/**
+ * Génère une mise en page. Photos retenues : d'abord celles déjà dans le montage, puis les autres
+ * par ordre de nom, en écartant `exclude` (photos déjà utilisées dans d'autres montages).
+ */
+export function applyGenerate(doc: Doc, lib: Library, g: GenerateParams, exclude: Set<string> = new Set()): void {
+  const inDoc = new Set(Object.values(doc.crops).map((c) => c.photo));
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'fr', { numeric: true });
+  const all = [...lib.photos.values()].sort(byName);
+  const photos = [
+    ...all.filter((p) => inDoc.has(p.name)),
+    ...all.filter((p) => !inDoc.has(p.name) && !exclude.has(p.name)),
+  ].slice(0, g.count);
   const n = Math.max(1, g.count);
   const aspects = photos.map((p) => p.w / p.h);
   if (aspects.length < n) aspects.push(...placeholderAspects(n - aspects.length, g.seed));
