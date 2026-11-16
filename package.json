@@ -2,6 +2,13 @@
   "name": "mosaique",
   "private": true,
   "version": "0.1.0",
+  "description": "Photo collages with slanted cuts, right in your browser: linked cells, auto layout, crop & zoom, print-ready export.",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tomy137/mosaique.git"
+  },
+  "keywords": ["photo-collage", "collage", "layout", "bsp", "svg", "print", "vite", "typescript"],
   "type": "module",
   "scripts": {
     "dev": "vite",
