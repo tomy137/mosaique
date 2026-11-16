@@ -247,6 +247,19 @@ svg.editor.panning, svg.editor.panning * { cursor: grabbing !important; }
 #zoom-ctl button { min-height: 24px; padding: 2px 8px; border: 0; background: transparent; font-variant-numeric: tabular-nums; }
 #zoom-ctl button:hover:not(:disabled) { background: var(--panel-2); }
 #zoom-level { min-width: 58px; }
+#zoom-ctl #toggle-rulers:not(.active) { opacity: 0.45; }
+
+/* règles en cm : bordent la zone du montage, en haut et à gauche */
+#stage.rulers { padding: 40px 18px 18px 40px; }
+.ruler { position: absolute; display: none; pointer-events: none; z-index: 2; }
+#stage.rulers .ruler { display: block; }
+#ruler-corner {
+  font-size: 9px; color: var(--muted); background: var(--panel); display: none;
+  align-items: center; justify-content: center; pointer-events: auto;
+}
+#stage.rulers #ruler-corner { display: flex; }
+body.presentation .ruler, body.presentation #stage.rulers #ruler-corner { display: none; }
+body.presentation #stage.rulers { padding: 12px; }
 body.presentation #zoom-ctl { display: none; }
 .cell-base { fill: #d8d2c8; cursor: grab; }
 .cell-base.missing { fill: #c9a49c; }

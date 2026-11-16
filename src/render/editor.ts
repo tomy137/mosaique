@@ -64,6 +64,9 @@ export class Editor {
 
   /** Appelé quand le zoom de la vue change (pour l'indicateur de zoom). */
   onView?: (zoom: number) => void;
+  /** Autres abonnés aux changements de vue (zoom, déplacement, format) : règles… */
+  private viewListeners: (() => void)[] = [];
+  onViewChange(fn: () => void): void { this.viewListeners.push(fn); }
 
   /** Appelé quand la sélection ou le mode change (pour la barre d'outils). */
   onUi?: () => void;
@@ -205,6 +208,7 @@ export class Editor {
     const c = this.center ?? this.pageCenter();
     this.svg.setAttribute('viewBox', `${c.x - w / 2} ${c.y - h / 2} ${w} ${h}`);
     this.onView?.(this.zoom);
+    for (const fn of this.viewListeners) fn();
   }
 
   /** Le centre de la vue reste sur la page : on ne peut pas la perdre de vue. */
@@ -248,6 +252,12 @@ export class Editor {
   }
 
   get viewZoom(): number { return this.zoom; }
+
+  /** Passage mm → pixels écran (pour les règles) : x_écran = a·x + e, y_écran = d·y + f. */
+  screenTransform(): { a: number; d: number; e: number; f: number } | null {
+    const m = this.svg.getScreenCTM();
+    return m ? { a: m.a, d: m.d, e: m.e, f: m.f } : null;
+  }
 
   private createCell(id: string): CellEls {
     const cp = el('clipPath', { id: clipId(id) }, this.defs);

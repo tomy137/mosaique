@@ -52,6 +52,8 @@ Mosaïque models the layout the way it actually is: **a page cut into pieces by 
 - 📦 **Export / import** a collage as `.json`, or as a `.zip` that bundles the original photos, to move it to another computer.
 - 🖨️ **Print export**: JPEG, PNG or PDF at full resolution (e.g. 60 × 40 cm at 300 dpi = 7087 × 4725 px), a light JPEG for screens, or the bare cell outlines as SVG for Illustrator.
 - ⛶ **Full screen** view of the collage alone.
+- 📏 **Rulers in centimetres** along the top and left of the collage, following zoom and scroll.
+- 🟣 **Duplicate warning**: a « ×2 » badge when the same photo appears twice in one collage.
 - 🗂️ **Two panels**: settings on the left in collapsible sections (with a one-line summary when folded), photos on the right in a resizable panel with adjustable thumbnail size. Each panel hides with one key.
 
 <table>
@@ -94,7 +96,7 @@ Then **drag a folder of photos from Finder / Explorer onto the page**. Mosaïque
 | `0` | Reset the photo's crop | `P` | Full screen (`Esc` to leave) |
 | `N` | New collage | `⌘S` | Save, with a copy in the history |
 | `M` | Show / hide the settings panel | `B` | Show / hide the photos panel |
-| `Tab` | Hide / show both panels | | |
+| `Tab` | Hide / show both panels | `⇧R` | Show / hide the cm rulers |
 | `⌘Z` / `⇧⌘Z` | Undo / redo | `O` · `A` · `E` | Open folder · add photos · export JPEG |
 
 In cut mode, hold `⇧` to force horizontal/vertical and `⌥` to disable snapping.

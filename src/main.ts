@@ -14,6 +14,7 @@ import { initLibrary, renderLibrary } from './ui/library';
 import { initMontages, renderMontages } from './ui/montages';
 import { setupPanels } from './ui/panels';
 import { initPersistence } from './ui/persistence';
+import { initRulers } from './ui/rulers';
 import { app, editor, saved, store } from './ui/state';
 import { initToast, toast } from './ui/toast';
 import { initToolbar, renderToolbar } from './ui/toolbar';
@@ -30,6 +31,7 @@ initLayout();
 initLibrary();
 initExportImage();
 initToolbar();
+initRulers();
 initKeyboard(panels);
 store.subscribe(() => { syncInputs(); renderLibrary(); renderToolbar(); });
 

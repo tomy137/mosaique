@@ -3,6 +3,7 @@
 import { $ } from './dom';
 import type { Panels } from './panels';
 import { saveNow } from './persistence';
+import { toggleRulers } from './rulers';
 import { editor, store } from './state';
 import { inPresentation, setPresentation } from './toolbar';
 import { toast } from './toast';
@@ -16,7 +17,7 @@ function letterActions(panels: Panels): Record<string, (e: KeyboardEvent) => voi
     escape: () => { toast(''); editor.sel = null; editor.setMode('select'); },
     delete: (e) => { e.preventDefault(); editor.deleteSelection(); },
     backspace: (e) => { e.preventDefault(); editor.deleteSelection(); },
-    r: () => editor.straightenSelected(),
+    r: (e) => (e.shiftKey ? toggleRulers() : editor.straightenSelected()),
     0: () => editor.resetCrop(),
     g: (e) => $(e.shiftKey ? 'btn-variant' : 'btn-gen').click(),
     f: click('btn-fill'),
