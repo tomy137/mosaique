@@ -31,6 +31,10 @@ body {
 body.hide-left { --left-w: 0px; }
 body.hide-right { --right-w: 0px; }
 body.hide-left #sidebar, body.hide-right #photos { display: none; }
+/* chaque zone garde sa colonne, même quand un volet est masqué */
+#sidebar { grid-column: 1; grid-row: 1; }
+main { grid-column: 2; grid-row: 1; }
+#photos { grid-column: 3; grid-row: 1; }
 
 /* ------------------------------------------------------------ barre latérale */
 
@@ -280,7 +284,7 @@ body.presentation #zoom-ctl { display: none; }
 
 /* ------------------------------------------------------------ plein écran (montage seul) */
 
-body.presentation { grid-template-columns: 1fr; }
+body.presentation { --left-w: 0px !important; --right-w: 0px !important; }
 body.presentation #sidebar, body.presentation #photos, body.presentation #toolbar, body.presentation #statusbar { display: none; }
 body.presentation main { grid-template-rows: 1fr; }
 body.presentation #stage { padding: 12px; background: #111; }
