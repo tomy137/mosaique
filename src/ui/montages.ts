@@ -9,6 +9,7 @@ import {
   montageName, nextDefaultName, removeMontageFile, renameMontageFile, trashMontage, uniqueFile, uniqueName, usageElsewhere,
   type Montage,
 } from '../storage/montages';
+import { photoUses } from '../render/editor';
 import { download } from '../render/export';
 import type { Doc } from '../types';
 import { $, ago, clone, fileSafe, photoCount } from './dom';
@@ -24,9 +25,15 @@ export function refreshUsage() {
   editor.render();
 }
 
+/** Alerte après avoir placé une photo : déjà dans une autre case de ce montage, ou dans un autre montage. */
 export function warnIfUsedElsewhere(photo: string) {
-  const others = app.usage.get(photo);
-  if (others?.length) toast(`Attention : « ${photo} » est déjà utilisée dans ${others.map((n) => `« ${n} »`).join(', ')}.`, 7000);
+  const here = photoUses(store.doc.crops).get(photo) ?? 0;
+  const others = app.usage.get(photo) ?? [];
+  const where = [
+    ...(here > 1 ? [`${here} fois dans ce montage`] : []),
+    ...(others.length ? [`dans ${others.map((n) => `« ${n} »`).join(', ')}`] : []),
+  ];
+  if (where.length) toast(`Attention : « ${photo} » est déjà utilisée ${where.join(' et ')}.`, 7000);
 }
 
 export function renderMontages() {

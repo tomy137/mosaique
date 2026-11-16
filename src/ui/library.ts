@@ -1,6 +1,6 @@
 // Bibliothèque de photos (volet de droite) : ajout, filtres, vignettes à glisser ou cliquer.
 
-import { PHOTO_MIME } from '../render/editor';
+import { PHOTO_MIME, photoUses } from '../render/editor';
 import { fileExists, writeFile } from '../storage/folder';
 import { defaultCrop } from '../photos/crop';
 import { $ } from './dom';
@@ -33,12 +33,13 @@ function placePhoto(cellId: string, photo: string) {
   warnIfUsedElsewhere(photo);
 }
 
-function thumbnail(p: { name: string; w: number; h: number; url: string }, here: Set<string>): HTMLElement {
+function thumbnail(p: { name: string; w: number; h: number; url: string }, here: Map<string, number>): HTMLElement {
   const others = app.usage.get(p.name) ?? [];
   const fig = document.createElement('figure');
   fig.className = `${here.has(p.name) ? 'used' : ''}${others.length ? ' elsewhere' : ''}`;
   fig.draggable = true;
-  fig.title = `${p.name} — ${p.w} × ${p.h}${here.has(p.name) ? ' · dans ce montage' : ''}`
+  const uses = here.get(p.name) ?? 0;
+  fig.title = `${p.name} — ${p.w} × ${p.h}${uses ? ` · ${uses > 1 ? `${uses} fois` : ''} dans ce montage` : ''}`
     + `${others.length ? `\nDéjà utilisée dans : ${others.map((n) => `« ${n} »`).join(', ')}` : ''}`
     + '\nGlisser sur une case, ou cliquer pour la placer dans la case sélectionnée.';
   const img = document.createElement('img');
@@ -48,6 +49,12 @@ function thumbnail(p: { name: string; w: number; h: number; url: string }, here:
   const cap = document.createElement('figcaption'); // nom affiché sur les grandes miniatures
   cap.textContent = p.name;
   fig.append(img, cap);
+  if (uses > 1) {
+    const twin = document.createElement('span');
+    twin.className = 'twin-badge';
+    twin.textContent = `×${uses}`;
+    fig.appendChild(twin);
+  }
   if (others.length) {
     const badge = document.createElement('span');
     badge.className = 'elsewhere-badge';
@@ -67,7 +74,7 @@ function thumbnail(p: { name: string; w: number; h: number; url: string }, here:
 }
 
 export function renderLibrary() {
-  const here = new Set(Object.values(store.doc.crops).map((c) => c.photo));
+  const here = photoUses(store.doc.crops); // photo → nombre de cases de ce montage
   const all = [...lib.photos.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
   const isFree = (n: string) => !here.has(n) && !app.usage.has(n);
   const keep: Record<LibFilter, (n: string) => boolean> = {

@@ -37,6 +37,7 @@ function contextItems(): HTMLElement[] {
     else {
       const others = app.usage.get(info.photo) ?? [];
       span.append(`${info.photo} · `, bold(`${info.dpi} dpi`, info.dpi! < 150));
+      if ((info.uses ?? 1) > 1) span.append(' · ', bold(`${info.uses}× dans ce montage`, true));
       if (others.length) span.append(' · ', bold(`aussi dans ${others.map((n) => `« ${n} »`).join(', ')}`, true));
       span.title = 'Résolution effective à l’impression (au moins 150 dpi conseillé)';
     }

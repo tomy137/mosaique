@@ -32,7 +32,7 @@ const SNAP_PX = 8;
 /** Zoom maximal de la vue (100 % = montage entier dans la fenêtre). */
 export const MAX_VIEW_ZOOM = 16;
 
-interface CellEls { g: SVGGElement; clip: SVGPolygonElement; base: SVGPolygonElement; img: SVGImageElement; warn: SVGGElement; dup: SVGGElement }
+interface CellEls { g: SVGGElement; clip: SVGPolygonElement; base: SVGPolygonElement; img: SVGImageElement; warn: SVGGElement; dup: SVGGElement; twin: SVGGElement }
 
 function el<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number> = {}, parent?: Element): SVGElementTagNameMap[K] {
   const e = document.createElementNS(NS, tag);
@@ -117,6 +117,7 @@ export class Editor {
 
     const seen = new Set<string>();
     const badge = Math.max(s.widthMm, s.heightMm) * 0.009;
+    const inDoc = photoUses(doc.crops); // photo → nombre de cases qui l'utilisent dans ce montage
     for (const [id, poly] of this.cells.insets) {
       if (poly.length < 3) continue;
       seen.add(id);
@@ -141,7 +142,7 @@ export class Editor {
         const low = dpi < LOW_DPI;
         e.warn.style.display = low ? '' : 'none';
         if (low) {
-          e.warn.setAttribute('transform', badgeAt(poly, -1, badge));
+          e.warn.setAttribute('transform', badgeAt(poly, -1, -1, badge));
           const c = e.warn.querySelector('circle')!;
           c.setAttribute('r', String(badge));
           const t = e.warn.querySelector('text')!;
@@ -151,17 +152,35 @@ export class Editor {
         const others = this.usedElsewhere?.(crop.photo) ?? [];
         e.dup.style.display = others.length ? '' : 'none';
         if (others.length) {
-          e.dup.setAttribute('transform', badgeAt(poly, 1, badge));
+          e.dup.setAttribute('transform', badgeAt(poly, 1, -1, badge));
           e.dup.querySelector('circle')!.setAttribute('r', String(badge));
           const t = e.dup.querySelector('text')!;
           t.setAttribute('font-size', String(badge * 1.25));
           t.textContent = String(others.length + 1);
           e.dup.querySelector('title')!.textContent = `Photo aussi utilisée dans : ${others.map((n) => `« ${n} »`).join(', ')}`;
         }
+        // même photo dans plusieurs cases de ce montage
+        const uses = inDoc.get(crop.photo) ?? 1;
+        e.twin.style.display = uses > 1 ? '' : 'none';
+        if (uses > 1) {
+          e.twin.setAttribute('transform', badgeAt(poly, -1, 1, badge * 1.4));
+          const rect = e.twin.querySelector('rect')!;
+          const w = badge * 2.9, h = badge * 1.9;
+          rect.setAttribute('x', String(-w / 2));
+          rect.setAttribute('y', String(-h / 2));
+          rect.setAttribute('width', String(w));
+          rect.setAttribute('height', String(h));
+          rect.setAttribute('rx', String(h / 2));
+          const t = e.twin.querySelector('text')!;
+          t.setAttribute('font-size', String(badge * 1.2));
+          t.textContent = `×${uses}`;
+          e.twin.querySelector('title')!.textContent = `Cette photo apparaît ${uses} fois dans ce montage`;
+        }
       } else {
         e.img.style.display = 'none';
         e.warn.style.display = 'none';
         e.dup.style.display = 'none';
+        e.twin.style.display = 'none';
       }
     }
     for (const [id, e] of this.els) {
@@ -246,7 +265,11 @@ export class Editor {
     el('circle', { cx: 0, cy: 0 }, dup);
     el('text', { x: 0, y: 0, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, dup);
     el('title', {}, dup);
-    const e = { g, clip, base, img, warn, dup };
+    const twin = el('g', { class: 'twin' }, g);
+    el('rect', {}, twin);
+    el('text', { x: 0, y: 0, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, twin);
+    el('title', {}, twin);
+    const e = { g, clip, base, img, warn, dup, twin };
     this.els.set(id, e);
     return e;
   }
@@ -617,7 +640,8 @@ export class Editor {
   }
 
   /** Informations sur la case sélectionnée, pour la barre d'outils. */
-  cellInfo(): { id: string; photo?: string; dpi?: number; missing?: boolean } | null {
+  /** Case sélectionnée : photo, résolution effective, et nombre de cases de ce montage qui l'utilisent. */
+  cellInfo(): { id: string; photo?: string; dpi?: number; missing?: boolean; uses?: number } | null {
     if (this.sel?.kind !== 'cell') return null;
     const id = this.sel.id;
     const crop = this.store.doc.crops[id];
@@ -625,18 +649,27 @@ export class Editor {
     const photo = this.lib.get(crop.photo);
     const bb = this.bbOf(id);
     if (!photo || !bb) return { id, photo: crop.photo, missing: true };
-    return { id, photo: crop.photo, dpi: Math.round(effectiveDpi(bb, photo.w, photo.h, crop)) };
+    const uses = photoUses(this.store.doc.crops).get(crop.photo) ?? 1;
+    return { id, photo: crop.photo, dpi: Math.round(effectiveDpi(bb, photo.w, photo.h, crop)), uses };
   }
 }
 
 const clipId = (id: string) => `clip-${id.replace(/\./g, '_')}`;
 
+/** Nombre de cases qui utilisent chaque photo dans un montage. */
+export function photoUses(crops: Record<string, { photo: string }>): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const c of Object.values(crops)) m.set(c.photo, (m.get(c.photo) ?? 0) + 1);
+  return m;
+}
+
 /**
- * Position d'une pastille dans le coin haut-gauche (side = -1) ou haut-droit (side = 1) de la case,
+ * Position d'une pastille dans un coin de la case (sx : -1 gauche, 1 droite ; sy : -1 haut, 1 bas),
  * ramenée vers l'intérieur : elle reste dans la case même quand ses bords sont obliques.
  */
-function badgeAt(poly: Poly, side: -1 | 1, r: number): string {
-  const corner = poly.reduce((best, p) => (side * p.x - p.y > side * best.x - best.y ? p : best), poly[0]);
+function badgeAt(poly: Poly, sx: -1 | 1, sy: -1 | 1, r: number): string {
+  const score = (p: Pt) => sx * p.x + sy * p.y;
+  const corner = poly.reduce((best, p) => (score(p) > score(best) ? p : best), poly[0]);
   const c = poly.reduce((acc, p) => add(acc, mul(p, 1 / poly.length)), { x: 0, y: 0 });
   const d = sub(c, corner);
   const l = len(d) || 1;
