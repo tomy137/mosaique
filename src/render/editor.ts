@@ -26,6 +26,9 @@ type Drag =
   | { t: 'draw'; start: Pt; cur: Pt; sx: number; sy: number }
   | { t: 'view'; x: number; y: number };
 
+/** Portée de l'aimant horizontal / vertical, en pixels à l'écran. */
+const SNAP_PX = 8;
+
 /** Zoom maximal de la vue (100 % = montage entier dans la fenêtre). */
 export const MAX_VIEW_ZOOM = 16;
 
@@ -436,8 +439,8 @@ export class Editor {
       }
       case 'draw': {
         let cur = pt;
-        if (e.shiftKey) cur = snapAngle(d.start, pt, 45);
-        else if (!e.altKey) cur = snapAngle(d.start, pt, 4);
+        if (e.shiftKey) cur = snapAngle(d.start, pt, 45); // ⇧ : toujours horizontal ou vertical
+        else if (!e.altKey) cur = this.snapToAxis(d.start, pt);
         d.cur = cur;
         this.renderOverlay();
         break;
@@ -445,12 +448,23 @@ export class Editor {
     }
   }
 
+  /**
+   * Aimant horizontal / vertical, mesuré en pixels à l'écran (et non en degrés) : il n'accroche que si le point
+   * passe à moins de SNAP_PX de la position droite. Une longue coupe peut ainsi prendre une très légère pente.
+   */
+  private snapToAxis(from: Pt, to: Pt): Pt {
+    const aligned = Math.abs(to.x - from.x) >= Math.abs(to.y - from.y) ? { x: to.x, y: from.y } : { x: from.x, y: to.y };
+    return dist(aligned, to) <= SNAP_PX * this.mmPerPx() ? aligned : to;
+  }
+
+  /** Extrémité déplacée le long du contour : aimantée si la coupe est presque horizontale ou verticale. */
   private snapEnd(fixed: Pt, np: Pt, parent: Poly): Pt {
-    const s = snapAngle(fixed, np, 3);
+    const s = this.snapToAxis(fixed, np);
     if (s === np) return np;
     const seg = lineThroughPolygon(parent, fixed, s);
     if (!seg) return np;
-    return dist(seg[0], fixed) > dist(seg[1], fixed) ? seg[0] : seg[1];
+    const end = dist(seg[0], fixed) > dist(seg[1], fixed) ? seg[0] : seg[1];
+    return dist(end, np) <= SNAP_PX * this.mmPerPx() ? end : np;
   }
 
   private up(e: PointerEvent) {
