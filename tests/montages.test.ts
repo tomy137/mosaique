@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { montageJson, montageZip, readImport, remapPhotos } from '../src/archive';
-import { nextDefaultName, safeFileBase, sameContent, uniqueFile, uniqueName, usageElsewhere, type Montage } from '../src/montages';
+import { montageJson, montageZip, readImport, remapPhotos } from '../src/storage/archive';
+import { nextDefaultName, safeFileBase, sameContent, uniqueFile, uniqueName, usageElsewhere, type Montage } from '../src/storage/montages';
 import type { Library } from '../src/photos/library';
-import { parseDoc } from '../src/project';
+import { parseDoc } from '../src/storage/doc';
 import type { Doc } from '../src/types';
 
 const S = { widthMm: 600, heightMm: 400, dpi: 300, gutterMm: 4, marginMm: 6, bg: '#fff' };

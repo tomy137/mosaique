@@ -4,11 +4,9 @@
 //  - suppression = déplacement dans mosaique-montages/.corbeille/ ;
 //  - l'ancien montage.json à la racine n'est jamais modifié (il est seulement copié comme premier montage).
 
-import { parseDoc } from './project';
-import type { Doc } from './types';
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type DirHandle = any;
+import type { Doc } from '../types';
+import { parseDoc } from './doc';
+import { writeFile as write, type DirHandle } from './folder';
 
 export const MONTAGES_DIR = 'mosaique-montages';
 export const HISTORY_DIR = '.historique';
@@ -74,13 +72,6 @@ async function subdir(dir: DirHandle, name: string, create: boolean): Promise<Di
   try { return await dir.getDirectoryHandle(name, { create }); } catch { return null; }
 }
 
-async function write(dir: DirHandle, name: string, data: Blob | string): Promise<void> {
-  const fh = await dir.getFileHandle(name, { create: true });
-  const w = await fh.createWritable();
-  await w.write(data);
-  await w.close();
-}
-
 export async function readMontages(dir: DirHandle): Promise<Montage[]> {
   const md = await subdir(dir, MONTAGES_DIR, false);
   if (!md) return [];
@@ -130,4 +121,10 @@ export async function renameMontageFile(dir: DirHandle, m: Montage, newFile: str
     const md = await subdir(dir, MONTAGES_DIR, false);
     try { await md?.removeEntry(m.file); } catch { /* déjà absent */ }
   }
+}
+
+/** Retire un fichier de montage sans copie (montage vide, jamais modifié). */
+export async function removeMontageFile(dir: DirHandle, file: string): Promise<void> {
+  const md = await subdir(dir, MONTAGES_DIR, false);
+  try { await md?.removeEntry(file); } catch { /* déjà absent */ }
 }

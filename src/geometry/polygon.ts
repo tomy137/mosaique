@@ -42,23 +42,6 @@ export function bbox(poly: Poly): BBox {
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
-export function centroid(poly: Poly): Pt {
-  const a = signedArea(poly);
-  if (Math.abs(a) < EPS) {
-    const s = poly.reduce((acc, p) => add(acc, p), { x: 0, y: 0 });
-    return mul(s, 1 / Math.max(1, poly.length));
-  }
-  let cx = 0, cy = 0;
-  for (let i = 0; i < poly.length; i++) {
-    const p = poly[i];
-    const q = poly[(i + 1) % poly.length];
-    const f = p.x * q.y - q.x * p.y;
-    cx += (p.x + q.x) * f;
-    cy += (p.y + q.y) * f;
-  }
-  return { x: cx / (6 * a), y: cy / (6 * a) };
-}
-
 /** Supprime les points en double et les points alignés. */
 export function cleanup(poly: Poly, tol = 1e-6): Poly {
   let pts = poly.slice();
@@ -79,15 +62,6 @@ export function cleanup(poly: Poly, tol = 1e-6): Poly {
     pts = out;
   }
   return pts.length >= 3 ? pts : [];
-}
-
-/** Intersection des droites (a,b) et (c,d), ou null si parallèles. */
-export function lineIntersection(a: Pt, b: Pt, c: Pt, d: Pt): Pt | null {
-  const r = sub(b, a), s = sub(d, c);
-  const den = cross(r, s);
-  if (Math.abs(den) < EPS) return null;
-  const t = cross(sub(c, a), s) / den;
-  return add(a, mul(r, t));
 }
 
 /**

@@ -2,9 +2,9 @@
 // Format du zip : montage.json + photos/<nom de fichier>. Les photos ne sont pas recompressées.
 
 import { strFromU8, strToU8, unzip, Zip, ZipDeflate, ZipPassThrough } from 'fflate';
-import { isImageName, type Library } from './photos/library';
-import { parseDoc } from './project';
-import type { Doc } from './types';
+import { isImageName, type Library } from '../photos/library';
+import { parseDoc } from './doc';
+import type { Doc } from '../types';
 
 export const ZIP_DOC = 'montage.json';
 export const ZIP_PHOTOS = 'photos/';

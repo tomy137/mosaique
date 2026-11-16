@@ -176,7 +176,3 @@ export function removeCut(root: BspNode, id: string): string[] {
 export function scaleTree(root: BspNode, sx: number, sy: number): void {
   forEachLine(root, (c, set) => set({ p: { x: c.p.x * sx, y: c.p.y * sy }, q: { x: c.q.x * sx, y: c.q.y * sy } }));
 }
-
-export function countLeaves(root: BspNode): number {
-  return leafIds(root).length;
-}

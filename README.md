@@ -169,10 +169,19 @@ src/
 ├── layout/       generate.ts (automatic layout) · edit.ts (split, merge, fill…)
 ├── photos/       library.ts (loading, previews) · crop.ts (cover, pan, zoom, dpi)
 ├── render/       editor.ts (interactive SVG editor) · export.ts (canvas, JPEG/PNG/PDF/SVG)
-├── montages.ts   several collages per folder, history, trash
-├── archive.ts    .json / .zip export and import
-├── project.ts    folder access, browser backups, favourite sizes
-└── main.ts       user interface
+├── storage/      data, no DOM
+│   ├── doc.ts        default document, safe parsing
+│   ├── folder.ts     folder access (File System Access API, read-only fallback)
+│   ├── montages.ts   several collages per folder, history, trash
+│   ├── archive.ts    .json / .zip export and import
+│   ├── local.ts      browser backups, per-tab state
+│   ├── recent.ts     recent folders (IndexedDB)
+│   └── presets.ts    favourite sizes
+├── ui/           user interface, one module per area, each with an init…() function
+│   ├── state.ts      shared state: document store, photo library, editor, open folder
+│   ├── folder.ts · montages.ts · format.ts · layout.ts · library.ts · exportImage.ts
+│   └── toolbar.ts · keyboard.ts · panels.ts · persistence.ts · heic.ts · toast.ts
+└── main.ts       wires the modules together and restores the tab's collage
 ```
 
 Stack: TypeScript, Vite, plain DOM + SVG (no UI framework), [fflate](https://github.com/101arrowz/fflate) for zip files and [jsPDF](https://github.com/parallax/jsPDF) for PDF export.

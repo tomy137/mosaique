@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pendingHeic } from '../src/project';
+import { pendingHeic } from '../src/storage/folder';
 
 describe('HEIC à convertir', () => {
   it('ignore les HEIC qui ont déjà leur JPEG du même nom', () => {
