@@ -5,7 +5,7 @@ import { area, bbox, lineThroughPolygon, type Pt } from '../geometry/polygon';
 import { defaultCrop } from '../photos/crop';
 import type { Library } from '../photos/library';
 import type { Cut, Doc } from '../types';
-import { generate, placeholderAspects } from './generate';
+import { generate, placeholderAspects, type LayoutMode } from './generate';
 
 /** Coupe une case. La photo éventuelle va dans la plus grande des deux moitiés. Renvoie false si invalide. */
 export function trySplit(doc: Doc, leafId: string, cut: Cut): boolean {
@@ -106,7 +106,7 @@ export function fillEmpty(doc: Doc, lib: Library, exclude: Set<string> = new Set
   return n;
 }
 
-export interface GenerateParams { count: number; seed: number; obliquityDeg: number; obliqueShare: number; minAreaFrac: number }
+export interface GenerateParams { count: number; seed: number; obliquityDeg: number; obliqueShare: number; minAreaFrac: number; mode?: LayoutMode }
 
 /** Génère une mise en page. Avec des photos : une case par photo, placées automatiquement. */
 /**
@@ -126,7 +126,7 @@ export function applyGenerate(doc: Doc, lib: Library, g: GenerateParams, exclude
   if (aspects.length < n) aspects.push(...placeholderAspects(n - aspects.length, g.seed));
   const { root, cellOf } = generate({
     aspects, settings: doc.settings, seed: g.seed, obliquityDeg: g.obliquityDeg, obliqueShare: g.obliqueShare,
-    minAreaFrac: g.minAreaFrac,
+    minAreaFrac: g.minAreaFrac, mode: g.mode,
   });
   doc.root = root;
   doc.crops = {};

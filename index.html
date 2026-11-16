@@ -82,6 +82,13 @@
 
       <section>
         <h2>Mise en page</h2>
+        <label class="field" title="Moulinet : quatre blocs tournent autour d'un bloc central, aucune ligne ne traverse la page">Disposition
+          <select id="gen-mode">
+            <option value="pinwheel">Moulinet : aucune ligne ne traverse la page</option>
+            <option value="classic">Classique : découpes successives</option>
+            <option value="random">Au hasard à chaque génération</option>
+          </select>
+        </label>
         <div class="row three">
           <label class="field">Cases<input id="gen-count" type="number" min="1" max="120" /></label>
           <label class="field">Obliquité<input id="gen-angle" type="range" min="0" max="20" step="1" /></label>

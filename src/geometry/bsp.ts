@@ -1,17 +1,22 @@
-// Arbre de coupes : chaque nœud interne coupe sa case en deux par une droite.
-// Les cases affichées sont les feuilles. Les droites sont en coordonnées absolues :
-// déplacer une coupe déforme automatiquement toutes les cases qui la touchent,
-// et les coupes qui s'appuient dessus (jonctions en T) s'allongent ou se raccourcissent.
+// Arbre de coupes : chaque nœud interne découpe sa case, les cases affichées sont les feuilles.
+// Deux sortes de nœuds :
+//  - coupe : une droite divise la case en deux (enfant 0 = côté side(p,q,·) > 0) ;
+//  - moulinet : quatre droites L0..L3 découpent la case en cinq zones sans qu'aucune ligne ne la traverse :
+//      zone k (k = 0..3) = côté + de Lk ∩ côté − de L(k+1) ;  zone 4 (centre) = côté − des quatre droites.
+// Les droites sont en coordonnées absolues : déplacer une coupe déforme toutes les cases qui la touchent,
+// et les coupes qui s'appuient dessus (jonctions en T) s'allongent ou se raccourcissent d'elles-mêmes.
+// Toutes les zones sont des intersections de demi-planes avec une case convexe : elles restent convexes.
 
 import type { BspNode, Cut, Settings } from '../types';
-import { area, insetConvex, lineThroughPolygon, splitByLine, type Poly, type Pt } from './polygon';
+import { area, clipHalfPlane, insetConvex, lineThroughPolygon, splitByLine, type Poly, type Pt } from './polygon';
 
 export interface CutInfo {
+  /** Identifiant de la coupe : id du nœud, ou « id#k » pour la droite k d'un moulinet. */
   id: string;
   cut: Cut;
-  /** Partie visible de la coupe (bornée par la case parente), triée dans le sens p→q. */
+  /** Partie visible de la coupe, triée dans le sens p→q. */
   seg: [Pt, Pt];
-  /** Case parente (avant gouttière). */
+  /** Zone dans laquelle les extrémités de la coupe peuvent glisser. */
   parent: Poly;
 }
 
@@ -26,12 +31,40 @@ export const rootPoly = (w: number, h: number): Poly => [
   { x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h },
 ];
 
+/** Les cinq zones d'un moulinet (4 ailes puis le centre) dans la case `poly`. */
+export function pinwheelRegions(poly: Poly, lines: Cut[]): Poly[] {
+  const L = (k: number) => lines[k % 4];
+  const regions: Poly[] = [];
+  for (let k = 0; k < 4; k++) {
+    let r = clipHalfPlane(poly, L(k).p, L(k).q, 1);
+    r = clipHalfPlane(r, L(k + 1).p, L(k + 1).q, -1);
+    regions.push(r);
+  }
+  let c = poly;
+  for (const l of lines) c = clipHalfPlane(c, l.p, l.q, -1);
+  regions.push(c);
+  return regions;
+}
+
 export function computeCells(root: BspNode, s: Settings): Cells {
   const leaves = new Map<string, Poly>();
   const cuts: CutInfo[] = [];
   let ok = true;
   const walk = (node: BspNode, poly: Poly) => {
-    if (node.cut && node.children) {
+    if (node.pin && node.children?.length === 5) {
+      const regions = poly.length >= 3 ? pinwheelRegions(poly, node.pin) : [[], [], [], [], []];
+      node.pin.forEach((l, k) => {
+        // la droite k sépare l'aile k du reste ; elle s'arrête sur la droite k+1
+        const zone = poly.length >= 3 ? clipHalfPlane(poly, node.pin![(k + 1) % 4].p, node.pin![(k + 1) % 4].q, -1) : [];
+        const seg = zone.length >= 3 ? lineThroughPolygon(zone, l.p, l.q) : null;
+        if (!seg) ok = false;
+        else cuts.push({ id: `${node.id}#${k}`, cut: l, seg, parent: zone });
+      });
+      regions.forEach((r, i) => {
+        if (r.length < 3) ok = false;
+        walk(node.children![i], r);
+      });
+    } else if (node.cut && node.children?.length === 2) {
       const [a, b] = poly.length >= 3 ? splitByLine(poly, node.cut.p, node.cut.q) : [[], []];
       const seg = poly.length >= 3 ? lineThroughPolygon(poly, node.cut.p, node.cut.q) : null;
       if (!seg || a.length < 3 || b.length < 3) ok = false;
@@ -83,13 +116,41 @@ export function isValid(cells: Cells, s: Settings): boolean {
 
 export function findNode(root: BspNode, id: string): BspNode | null {
   if (root.id === id) return root;
-  if (!root.children) return null;
-  return findNode(root.children[0], id) ?? findNode(root.children[1], id);
+  for (const c of root.children ?? []) {
+    const f = findNode(c, id);
+    if (f) return f;
+  }
+  return null;
 }
 
 export function leafIds(root: BspNode): string[] {
   if (!root.children) return [root.id];
-  return [...leafIds(root.children[0]), ...leafIds(root.children[1])];
+  return root.children.flatMap(leafIds);
+}
+
+/** Nœud qui porte une coupe (« r.0 » ou « r.0#2 » → « r.0 »). */
+export const lineNodeId = (lineId: string) => lineId.split('#')[0];
+
+export function getLine(root: BspNode, lineId: string): Cut | null {
+  const [nid, k] = lineId.split('#');
+  const node = findNode(root, nid);
+  if (!node) return null;
+  return k === undefined ? node.cut ?? null : node.pin?.[Number(k)] ?? null;
+}
+
+export function setLine(root: BspNode, lineId: string, cut: Cut): void {
+  const [nid, k] = lineId.split('#');
+  const node = findNode(root, nid);
+  if (!node) return;
+  if (k === undefined) node.cut = cut;
+  else if (node.pin) node.pin[Number(k)] = cut;
+}
+
+/** Parcourt toutes les droites de l'arbre (coupes et droites de moulinets). */
+export function forEachLine(node: BspNode, fn: (cut: Cut, set: (c: Cut) => void) => void): void {
+  if (node.cut) fn(node.cut, (c) => { node.cut = c; });
+  node.pin?.forEach((l, k) => fn(l, (c) => { node.pin![k] = c; }));
+  node.children?.forEach((c) => forEachLine(c, fn));
 }
 
 /** Transforme une feuille en nœud coupé. Renvoie les identifiants des deux nouvelles cases. */
@@ -101,22 +162,19 @@ export function splitLeaf(root: BspNode, id: string, cut: Cut): [string, string]
   return [`${id}.0`, `${id}.1`];
 }
 
-/** Supprime une coupe (et toutes les coupes de son sous-arbre). Renvoie les feuilles supprimées. */
+/** Supprime une coupe ou un moulinet (et tout son sous-arbre). Renvoie les feuilles supprimées. */
 export function removeCut(root: BspNode, id: string): string[] {
-  const node = findNode(root, id);
+  const node = findNode(root, lineNodeId(id));
   if (!node || !node.children) return [];
   const removed = leafIds(node);
   delete node.cut;
+  delete node.pin;
   delete node.children;
   return removed;
 }
 
-export function scaleTree(node: BspNode, sx: number, sy: number): void {
-  if (node.cut) {
-    node.cut.p = { x: node.cut.p.x * sx, y: node.cut.p.y * sy };
-    node.cut.q = { x: node.cut.q.x * sx, y: node.cut.q.y * sy };
-  }
-  node.children?.forEach((c) => scaleTree(c, sx, sy));
+export function scaleTree(root: BspNode, sx: number, sy: number): void {
+  forEachLine(root, (c, set) => set({ p: { x: c.p.x * sx, y: c.p.y * sy }, q: { x: c.q.x * sx, y: c.q.y * sy } }));
 }
 
 export function countLeaves(root: BspNode): number {

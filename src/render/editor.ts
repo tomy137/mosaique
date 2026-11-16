@@ -1,6 +1,6 @@
 // Éditeur interactif en SVG (unités : mm).
 
-import { computeCells, findNode, isValid, type Cells, type CutInfo } from '../geometry/bsp';
+import { computeCells, getLine, isValid, lineNodeId, setLine, type Cells, type CutInfo } from '../geometry/bsp';
 import {
   add, bbox, closestOnBoundary, dist, dot, len, lineThroughPolygon, mul, pointInPolygon, polyToPoints, sub,
   type Poly, type Pt,
@@ -245,12 +245,12 @@ export class Editor {
 
   /** Remplace une coupe si la mise en page reste valide. */
   private setCut(id: string, cut: Cut): boolean {
-    const node = findNode(this.store.doc.root, id);
-    if (!node?.cut) return false;
-    const old = node.cut;
-    node.cut = cut;
-    if (!isValid(computeCells(this.store.doc.root, this.store.doc.settings), this.store.doc.settings)) {
-      node.cut = old;
+    const root = this.store.doc.root;
+    const old = getLine(root, id);
+    if (!old) return false;
+    setLine(root, id, cut);
+    if (!isValid(computeCells(root, this.store.doc.settings), this.store.doc.settings)) {
+      setLine(root, id, old);
       return false;
     }
     this.render();
@@ -291,12 +291,12 @@ export class Editor {
       this.drag = { t: 'cut-end', id: c.id, end, fixed: c.seg[1 - end], parent: c.parent };
     } else if (kind === 'cut') {
       const id = target.getAttribute('data-id')!;
-      const node = findNode(doc.root, id)!;
+      const line = getLine(doc.root, id)!;
       this.sel = { kind: 'cut', id };
-      const d = sub(node.cut!.q, node.cut!.p);
+      const d = sub(line.q, line.p);
       const l = len(d) || 1;
       this.store.checkpoint();
-      this.drag = { t: 'cut-move', id, start: pt, p0: node.cut!.p, q0: node.cut!.q, n: { x: -d.y / l, y: d.x / l } };
+      this.drag = { t: 'cut-move', id, start: pt, p0: line.p, q0: line.q, n: { x: -d.y / l, y: d.x / l } };
     } else {
       const id = this.leafAt(pt);
       this.sel = id ? { kind: 'cell', id } : null;
@@ -466,8 +466,9 @@ export class Editor {
     const s = this.sel;
     if (!s) return;
     if (s.kind === 'cut') {
-      this.store.change((d) => mergeAt(d, s.id, this.cells));
-      this.sel = this.cells.leaves.has(s.id) ? { kind: 'cell', id: s.id } : null;
+      const nodeId = lineNodeId(s.id); // supprimer un trait de moulinet supprime tout le moulinet
+      this.store.change((d) => mergeAt(d, nodeId, this.cells));
+      this.sel = this.cells.leaves.has(nodeId) ? { kind: 'cell', id: nodeId } : null;
     } else if (this.store.doc.crops[s.id]) {
       this.store.change((d) => { delete d.crops[s.id]; });
     }

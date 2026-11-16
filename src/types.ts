@@ -5,8 +5,11 @@ export interface Cut { p: Pt; q: Pt }
 
 export interface BspNode {
   id: string;
+  /** Coupe simple : deux enfants. */
   cut?: Cut;
-  children?: [BspNode, BspNode];
+  /** Moulinet : quatre droites, cinq enfants (quatre ailes puis le centre). */
+  pin?: Cut[];
+  children?: BspNode[];
 }
 
 /** Cadrage d'une photo dans une case : le point (fx, fy) de l'image (0–1) est placé au centre de la case. */

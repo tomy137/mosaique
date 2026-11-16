@@ -39,6 +39,7 @@ Mosaïque models the layout the way it actually is: **a page cut into pieces by 
 - ✂️ **Cuts that stay linked**: straight or slanted, they end on other cuts (T-junctions) and keep following them.
 - 🎛️ **Direct editing**: drag a cut to move it, drag its handles to rotate it (snaps to horizontal/vertical), click to split a cell, straighten or delete a cut.
 - 🪄 **Automatic layout**: one cell per photo, each cell close to its photo's aspect ratio, with adjustable slant, share of slanted cuts and a **minimum cell size** (no more tiny cells).
+- 🌀 **Pinwheel layout**: four blocks turn around a central one, so that **no line runs across the whole page**, the way collages are often made by hand. Pick *Moulinet*, *Classique* or *Au hasard* before generating.
 - 📐 **Even gutter and margin**, background colour, any page size in cm + dpi, and **favourite sizes** for the formats you print again and again.
 
 **Photos**
@@ -137,6 +138,17 @@ graph TD
 - **The gutter is a polygon inset**: every cell is convex (a convex polygon cut by a line stays convex), so shrinking it is an intersection of shifted half-planes, with the page margin on outer edges and half a gutter on inner ones.
 - **Crops are stored relative to the cell** (focal point + zoom), so photos stay framed when a cell changes shape.
 - **Automatic layout** uses slicing trees: side by side, aspect ratios add up (`a = a₁ + a₂`); stacked, their inverses do (`1/a = 1/a₁ + 1/a₂`). Random trees are scored on how well they fit the page and the photos and on the minimum cell size, then refined by local search (flip a cut, swap two photos, rotate a subtree). A 60-photo layout takes about 0.1 s.
+- **Pinwheel nodes** are the one non-guillotine element: four lines L0…L3 split a cell into four "wings" (`+Lk ∩ −Lk+1`) and a centre (`−L0 ∩ … ∩ −L3`). Every line stops on the next one, so none crosses the cell. The generator places the four lines, spreads the photos over the five blocks and lays out each block as above.
+
+```text
+┌─────────────┬───────┐
+│      A      │       │
+├──────┬──────┤   B   │
+│      │  E   │       │
+│  D   ├──────┴───────┤
+│      │      C       │
+└──────┴──────────────┘
+```
 - **Print export** redraws everything on a canvas from the original files, at the page size and dpi you chose.
 
 ## Development

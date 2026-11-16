@@ -1,8 +1,8 @@
 import './style.css';
 import { isImportFile, montageJson, montageZip, readImport, remapPhotos } from './archive';
-import { scaleTree } from './geometry/bsp';
+import { forEachLine, scaleTree } from './geometry/bsp';
 import { applyGenerate, fillEmpty } from './layout/edit';
-import { DEFAULT_MIN_AREA_FRAC } from './layout/generate';
+import { DEFAULT_MIN_AREA_FRAC, type LayoutMode } from './layout/generate';
 import {
   montageName, nextDefaultName, readMontages, renameMontageFile, sameContent, snapshotMontage, trashMontage,
   uniqueFile, uniqueName, usageElsewhere, writeMontage, type Montage,
@@ -713,12 +713,8 @@ function resize(widthMm: number, heightMm: number, dpi = store.doc.settings.dpi)
 
 /** Échange largeur et hauteur en transposant la mise en page (x ↔ y). */
 function transpose(n: BspNode) {
-  if (n.cut) {
-    const { p, q } = n.cut;
-    // la symétrie inverse les côtés : on échange p et q pour garder chaque photo dans sa case
-    n.cut = { p: { x: q.y, y: q.x }, q: { x: p.y, y: p.x } };
-  }
-  n.children?.forEach(transpose);
+  // la symétrie inverse les côtés : on échange p et q pour garder chaque photo dans sa case
+  forEachLine(n, ({ p, q }, set) => set({ p: { x: q.y, y: q.x }, q: { x: p.y, y: p.x } }));
 }
 
 $('preset').onchange = () => {
@@ -771,8 +767,20 @@ genCount.value = '30';
 let countTouched = false;
 genCount.oninput = () => (countTouched = true);
 
+// Disposition choisie avant de générer (mémorisée dans le navigateur)
+const MODE_KEY = 'mosaique.layoutMode';
+const modeSelect = $<HTMLSelectElement>('gen-mode');
+try { const m = localStorage.getItem(MODE_KEY); if (m) modeSelect.value = m; } catch { /* ignore */ }
+if (!modeSelect.value) modeSelect.value = 'pinwheel';
+modeSelect.onchange = () => {
+  try { localStorage.setItem(MODE_KEY, modeSelect.value); } catch { /* ignore */ }
+  genInfo();
+};
+const layoutMode = () => modeSelect.value as LayoutMode;
+
 function genInfo() {
-  $('gen-info').textContent = `Obliquité ${num('gen-angle')}° sur ${num('gen-share')} % des coupes · plus petite case ≥ ${num('gen-min')} % de la moyenne · variante n° ${seed % 1000}`;
+  const mode = { pinwheel: 'Moulinet', classic: 'Classique', random: 'Disposition au hasard' }[layoutMode()];
+  $('gen-info').textContent = `${mode} · obliquité ${num('gen-angle')}° sur ${num('gen-share')} % des coupes · plus petite case ≥ ${num('gen-min')} % de la moyenne · variante n° ${seed % 1000}`;
 }
 $('gen-angle').oninput = genInfo;
 $('gen-share').oninput = genInfo;
@@ -786,6 +794,7 @@ function generateLayout(newSeed = true) {
   const count = Math.max(1, Math.min(120, num('gen-count') || lib.photos.size || 30));
   store.change((d) => applyGenerate(d, lib, {
     count, seed, obliquityDeg: num('gen-angle'), obliqueShare: num('gen-share') / 100, minAreaFrac: num('gen-min') / 100,
+    mode: layoutMode(),
   }, excluded()));
   genInfo();
 }
