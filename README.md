@@ -12,6 +12,8 @@ then export a print-ready file.
 ![Vite](https://img.shields.io/badge/Vite-dev_server-646cff)
 ![No backend](https://img.shields.io/badge/backend-none-2ea44f)
 
+### [▶ Try it online: tomy137.github.io/mosaique](https://tomy137.github.io/mosaique/)
+
 ![The Mosaïque editor](docs/images/editor.jpg)
 
 </div>
@@ -63,7 +65,9 @@ Mosaïque models the layout the way it actually is: **a page cut into pieces by 
 
 ## Quick start
 
-Requirements: Node.js 20+ and **Google Chrome** (or another Chromium browser) to save collages directly into your folder.
+**Online**: open **[tomy137.github.io/mosaique](https://tomy137.github.io/mosaique/)** in Google Chrome (or another Chromium browser) and drag a folder of photos onto the page. Nothing to install, and your photos stay on your computer.
+
+**Locally** (needs Node.js 20+), which also gives the HEIC helper the folder's full path:
 
 ```bash
 git clone https://github.com/tomy137/mosaique.git
@@ -112,7 +116,7 @@ Christmas 2026/
 - Chrome asks once for permission to write into the folder (*« Autoriser l'enregistrement dans le dossier »*).
 - Recent folders reopen in one click, and each browser tab can work on its own collage.
 
-**HEIC photos** (iPhone) can't be decoded by Chrome. Mosaïque detects them and shows a ready-to-paste `sips` command, with the folder's full path, that converts them to JPEG next to the originals.
+**HEIC photos** (iPhone) can't be decoded by Chrome. Mosaïque detects them and shows a ready-to-paste `sips` command that converts them to JPEG next to the originals (with the folder's full path filled in when running locally).
 
 ## How it works
 
@@ -157,9 +161,13 @@ src/
 Stack: TypeScript, Vite, plain DOM + SVG (no UI framework), [fflate](https://github.com/101arrowz/fflate) for zip files and [jsPDF](https://github.com/parallax/jsPDF) for PDF export.
 The dev server adds one local-only endpoint, `/api/locate`, used to find a folder's full path for the HEIC command.
 
-## Privacy
+## Privacy & security
 
-There is no backend and no tracking. Photos are read from your disk by your browser and are never uploaded anywhere.
+- There is no backend and no tracking. Photos are read from your disk by your browser and are never uploaded anywhere.
+- The online version is a static site served by GitHub Pages, with a strict Content Security Policy: only the site's own scripts run, and the page makes no requests to other servers.
+- File and collage names (including those coming from an imported `.zip`) are always rendered as text, never as HTML.
+- Folder access uses Chrome's File System Access API: the browser asks before Mosaïque can write into a folder, and the permission only covers the folders you open.
+- Deployment: every push to `main` runs the tests and the build, then publishes `dist/` (see [`.github/workflows/pages.yml`](.github/workflows/pages.yml)). The dev server and its local `/api/locate` endpoint are never deployed.
 
 ## License
 

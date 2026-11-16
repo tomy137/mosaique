@@ -150,15 +150,19 @@ async function showHeicHelp(folderName: string, heic: string[]) {
   $('heic-cmd').textContent = heicCommand(null);
   $('heic-after').textContent = 'Recherche du chemin du dossier…';
   $('heic-box').hidden = false;
+  // Le chemin complet n'est connu qu'en version locale (serveur de dev, /api/locate) ; en ligne, commande générique.
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   let dir: string | null = null;
-  try {
-    const r = await fetch(`/api/locate?name=${encodeURIComponent(folderName)}&file=${encodeURIComponent(heic[0])}`);
-    dir = (await r.json()).path ?? null;
-  } catch { /* serveur sans l'API : commande générique */ }
+  if (local) {
+    try {
+      const r = await fetch(`/api/locate?name=${encodeURIComponent(folderName)}&file=${encodeURIComponent(heic[0])}`);
+      dir = (await r.json()).path ?? null;
+    } catch { /* serveur sans l'API : commande générique */ }
+  }
   $('heic-cmd').textContent = heicCommand(dir);
   $('heic-after').textContent = (dir
     ? ''
-    : `Chemin de « ${folderName} » introuvable automatiquement : remplacer la partie entre guillemets en glissant le dossier dans le Terminal. `)
+    : `${local ? `Chemin de « ${folderName} » introuvable automatiquement` : 'Version en ligne : chemin du dossier inconnu'} : remplacer la partie entre guillemets en glissant le dossier dans le Terminal. `)
     + 'Une fois la conversion terminée, glisser à nouveau le dossier sur la page.';
 }
 
@@ -952,12 +956,22 @@ function renderToolbar() {
   $<HTMLButtonElement>('btn-redo').disabled = !store.canRedo;
   const ctx = $('context');
   ctx.replaceChildren();
-  const btn = (label: string, title: string, fn: () => void) => {
+  // Aucun innerHTML : les noms de photos et de montages viennent de fichiers (éventuellement importés) et
+  // sont toujours insérés comme texte.
+  const btn = (label: string, key: string, title: string, fn: () => void) => {
     const b = document.createElement('button');
-    b.innerHTML = label;
+    const k = document.createElement('kbd');
+    k.textContent = key;
+    b.append(`${label} `, k);
     b.title = title;
     b.onclick = fn;
     ctx.appendChild(b);
+  };
+  const bold = (text: string, low: boolean) => {
+    const b = document.createElement('b');
+    if (low) b.className = 'low';
+    b.textContent = text;
+    return b;
   };
   const info = editor.cellInfo();
   if (info) {
@@ -967,18 +981,18 @@ function renderToolbar() {
     else if (info.missing) span.textContent = `${info.photo} · introuvable`;
     else {
       const others = usage.get(info.photo) ?? [];
-      span.innerHTML = `${info.photo} · <b class="${info.dpi! < 150 ? 'low' : ''}">${info.dpi} dpi</b>`
-        + (others.length ? ` · <b class="low">aussi dans ${others.map((n) => `« ${n.replace(/</g, '&lt;')} »`).join(', ')}</b>` : '');
+      span.append(`${info.photo} · `, bold(`${info.dpi} dpi`, info.dpi! < 150));
+      if (others.length) span.append(' · ', bold(`aussi dans ${others.map((n) => `« ${n} »`).join(', ')}`, true));
       span.title = 'Résolution effective à l’impression (au moins 150 dpi conseillé)';
     }
     ctx.appendChild(span);
     if (info.photo) {
-      btn('Recentrer <kbd>0</kbd>', 'Recadrage par défaut (0 ou double-clic)', () => editor.resetCrop());
-      btn('Retirer <kbd>⌫</kbd>', 'Retirer la photo de la case (Suppr)', () => editor.deleteSelection());
+      btn('Recentrer', '0', 'Recadrage par défaut (0 ou double-clic)', () => editor.resetCrop());
+      btn('Retirer', '⌫', 'Retirer la photo de la case (Suppr)', () => editor.deleteSelection());
     }
   } else if (editor.sel?.kind === 'cut') {
-    btn('Redresser <kbd>R</kbd>', 'Rendre la coupe horizontale ou verticale (R)', () => editor.straightenSelected());
-    btn('Supprimer la coupe <kbd>⌫</kbd>', 'Fusionner les cases de part et d’autre (Suppr)', () => editor.deleteSelection());
+    btn('Redresser', 'R', 'Rendre la coupe horizontale ou verticale (R)', () => editor.straightenSelected());
+    btn('Supprimer la coupe', '⌫', 'Fusionner les cases de part et d’autre (Suppr)', () => editor.deleteSelection());
   }
   updateHelp();
 }
