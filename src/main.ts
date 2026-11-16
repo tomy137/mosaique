@@ -16,6 +16,7 @@ import {
 import { Editor, PHOTO_MIME } from './render/editor';
 import { download, layoutSvg, pxForPrint, renderCanvas, toImageBlob, toPdfBlob } from './render/export';
 import { Store } from './store';
+import { setupPanels } from './ui/panels';
 import type { BspNode, Doc, FormatPreset } from './types';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -29,6 +30,7 @@ const saved = loadLocal(montageKey(project, currentFile)) ?? loadLocal(project) 
 const store = new Store(saved ?? newDoc());
 const lib = new Library();
 const editor = new Editor($('stage'), store, lib);
+const panels = setupPanels();
 
 /** Montages du dossier courant (le montage ouvert y est recopié à chaque enregistrement). */
 let montages: Montage[] = [];
@@ -472,6 +474,11 @@ function renderMontages() {
   $('montage-info').textContent = folder
     ? `Enregistré dans ${folder.name}/mosaique-montages (historique et corbeille inclus). Le .zip contient aussi les photos originales.`
     : pendingWrite ? 'Pas encore enregistré dans le dossier : cliquer sur « Autoriser l’enregistrement ».' : 'Gardé dans le navigateur : ouvrir un dossier pour enregistrer les montages à côté des photos.';
+  // résumés visibles quand les sections sont repliées, et titre dans la barre d'outils
+  const n = new Set(Object.values(store.doc.crops).map((c) => c.photo)).size;
+  $('sum-montage').textContent = `${currentName()} · ${n} photo${n > 1 ? 's' : ''}${montages.length > 1 ? ` · ${montages.length} montages` : ''}`;
+  $('sum-dossier').textContent = project || 'aucun dossier';
+  $('doc-title').textContent = project ? `${project} › ${currentName()}` : currentName();
 }
 
 async function openMontage(m: Montage) {
@@ -673,18 +680,26 @@ $<HTMLInputElement>('import-input').onchange = async (e) => {
 
 // ------------------------------------------------------------------ format & tailles préférées
 
+/** Met à jour un champ, sauf celui qu'on est en train de modifier (on n'écrase pas la saisie). */
+function setField(id: string, value: string) {
+  const el = $<HTMLInputElement>(id);
+  if (el !== document.activeElement && el.value !== value) el.value = value;
+}
+
 function syncInputs() {
   const s = store.doc.settings;
-  $<HTMLInputElement>('w').value = String(+(s.widthMm / 10).toFixed(2));
-  $<HTMLInputElement>('h').value = String(+(s.heightMm / 10).toFixed(2));
-  $<HTMLInputElement>('dpi').value = String(s.dpi);
-  $<HTMLInputElement>('gutter').value = String(s.gutterMm);
-  $<HTMLInputElement>('margin').value = String(s.marginMm);
-  $<HTMLInputElement>('bg').value = s.bg;
+  setField('w', String(+(s.widthMm / 10).toFixed(2)));
+  setField('h', String(+(s.heightMm / 10).toFixed(2)));
+  setField('dpi', String(s.dpi));
+  setField('gutter', String(s.gutterMm));
+  setField('margin', String(s.marginMm));
+  setField('bg', s.bg);
   renderPresets();
   const px = pxForPrint(store.doc);
   const pxH = Math.round((s.heightMm / s.widthMm) * px);
   $('export-info').textContent = `Impression : ${px} × ${pxH} px (${s.widthMm / 10} × ${s.heightMm / 10} cm à ${s.dpi} dpi)`;
+  $('sum-format').textContent = `${s.widthMm / 10} × ${s.heightMm / 10} cm · ${s.dpi} dpi`;
+  $('sum-export').textContent = `${px} × ${pxH} px`;
 }
 
 function renderPresets() {
@@ -752,8 +767,28 @@ $('btn-rotate').onclick = () => store.change((d) => {
 for (const id of ['w', 'h', 'dpi']) {
   $(id).onchange = () => resize(num('w') * 10, num('h') * 10, Math.max(72, num('dpi') || 300));
 }
-$('gutter').onchange = () => store.change((d) => { d.settings.gutterMm = Math.max(0, num('gutter')); });
-$('margin').onchange = () => store.change((d) => { d.settings.marginMm = Math.max(0, num('margin')); });
+/**
+ * Gouttière et marge s'appliquent en direct (frappe, flèches, molette), pas seulement en quittant le champ.
+ * Un seul point d'annulation par modification ; une valeur incomplète en cours de frappe est ignorée.
+ */
+function liveSetting(id: string, key: 'gutterMm' | 'marginMm') {
+  const el = $<HTMLInputElement>(id);
+  let editing = false;
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value.replace(',', '.'));
+    if (!Number.isFinite(v) || v < 0 || v > 200) return;
+    if (!editing) { store.checkpoint(); editing = true; }
+    store.doc.settings[key] = v;
+    store.emit();
+  });
+  el.addEventListener('change', () => {
+    editing = false;
+    store.dropNoopCheckpoint();
+    el.value = String(store.doc.settings[key]); // valeur réellement appliquée
+  });
+}
+liveSetting('gutter', 'gutterMm');
+liveSetting('margin', 'marginMm');
 $('bg').oninput = () => { store.doc.settings.bg = $<HTMLInputElement>('bg').value; editor.render(); };
 $('bg').onchange = () => store.change((d) => { d.settings.bg = $<HTMLInputElement>('bg').value; });
 
@@ -765,7 +800,7 @@ $<HTMLInputElement>('gen-share').value = '35';
 $<HTMLInputElement>('gen-min').value = String(DEFAULT_MIN_AREA_FRAC * 100);
 genCount.value = '30';
 let countTouched = false;
-genCount.oninput = () => (countTouched = true);
+genCount.oninput = () => { countTouched = true; genInfo(); };
 
 // Disposition choisie avant de générer (mémorisée dans le navigateur)
 const MODE_KEY = 'mosaique.layoutMode';
@@ -781,6 +816,7 @@ const layoutMode = () => modeSelect.value as LayoutMode;
 function genInfo() {
   const mode = { pinwheel: 'Moulinet', classic: 'Classique', random: 'Disposition au hasard' }[layoutMode()];
   $('gen-info').textContent = `${mode} · obliquité ${num('gen-angle')}° sur ${num('gen-share')} % des coupes · plus petite case ≥ ${num('gen-min')} % de la moyenne · variante n° ${seed % 1000}`;
+  $('sum-layout').textContent = `${mode} · ${num('gen-count')} cases`;
 }
 $('gen-angle').oninput = genInfo;
 $('gen-share').oninput = genInfo;
@@ -834,13 +870,16 @@ $<HTMLInputElement>('file-input').onchange = (e) => {
   addFiles([...(input.files ?? [])]);
   input.value = '';
 };
-const sidebar = $('sidebar');
-sidebar.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); });
-sidebar.addEventListener('drop', (e) => {
+// des photos déposées sur l'un des deux volets sont ajoutées à la bibliothèque
+for (const panel of [$('sidebar'), $('photos')]) {
+  panel.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); });
+  panel.addEventListener('drop', (e) => dropOnPanel(e));
+}
+function dropOnPanel(e: DragEvent) {
   if (!e.dataTransfer?.files.length) return;
   e.preventDefault();
   addFiles([...e.dataTransfer.files]);
-});
+}
 
 type LibFilter = 'all' | 'free' | 'here' | 'elsewhere';
 let libFilter: LibFilter = 'all';
@@ -873,7 +912,9 @@ function renderLibrary() {
     img.src = p.url;
     img.loading = 'lazy';
     img.draggable = false;
-    fig.appendChild(img);
+    const cap = document.createElement('figcaption'); // nom affiché sur les grandes miniatures
+    cap.textContent = p.name;
+    fig.append(img, cap);
     if (others.length) {
       const badge = document.createElement('span');
       badge.className = 'elsewhere-badge';
@@ -1032,7 +1073,7 @@ window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   const mod = e.metaKey || e.ctrlKey;
   if (mod && k === 's') { e.preventDefault(); saveNow(); return; }
-  if (t.matches('input, select, textarea')) return;
+  if (t.matches('input:not([type=range]):not([type=checkbox]), select, textarea')) return; // un curseur ne bloque pas les raccourcis
   if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? store.redo() : store.undo(); return; }
   if (mod && k === 'y') { e.preventDefault(); store.redo(); return; }
   if (mod) return;
@@ -1061,6 +1102,9 @@ window.addEventListener('keydown', (e) => {
     case 'e': $('btn-jpg').click(); break;
     case 'n': $('btn-m-new').click(); break;
     case 'p': setPresentation(true); break;
+    case 'm': panels.toggleLeft(); break;
+    case 'b': panels.toggleRight(); break;
+    case 'tab': e.preventDefault(); panels.toggleAll(); break;
   }
 });
 
