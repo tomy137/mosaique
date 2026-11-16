@@ -169,6 +169,18 @@ main { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; min-heigh
 /* ------------------------------------------------------------ éditeur SVG */
 
 svg.editor { width: 100%; height: 100%; display: block; user-select: none; touch-action: none; }
+svg.editor.pan-ready, svg.editor.pan-ready * { cursor: grab !important; }
+svg.editor.panning, svg.editor.panning * { cursor: grabbing !important; }
+
+#zoom-ctl {
+  position: absolute; right: 22px; bottom: 22px; z-index: 5; display: flex; gap: 2px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 3px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+#zoom-ctl button { min-height: 24px; padding: 2px 8px; border: 0; background: transparent; font-variant-numeric: tabular-nums; }
+#zoom-ctl button:hover:not(:disabled) { background: var(--panel-2); }
+#zoom-level { min-width: 58px; }
+body.presentation #zoom-ctl { display: none; }
 .cell-base { fill: #d8d2c8; cursor: grab; }
 .cell-base.missing { fill: #c9a49c; }
 .cell-img { pointer-events: none; }

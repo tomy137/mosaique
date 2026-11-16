@@ -96,6 +96,8 @@ Then **drag a folder of photos from Finder / Explorer onto the page**. Mosaïque
 
 In cut mode, hold `⇧` to force horizontal/vertical and `⌥` to disable snapping.
 
+**View** (handy for wide or tall formats): `⌘` + wheel or trackpad pinch to zoom around the pointer, `Space` + drag (or middle-click drag) to move around, `⇧` + wheel to scroll, `+` / `−` to zoom, `⇧1` to see the whole page again. The plain wheel over a photo still zooms the photo itself.
+
 ## Where things are saved
 
 Collages live next to your photos, in a plain JSON format:

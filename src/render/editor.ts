@@ -23,7 +23,11 @@ type Drag =
   | { t: 'swap'; from: string; over: string | null }
   | { t: 'cut-move'; id: string; start: Pt; p0: Pt; q0: Pt; n: Pt }
   | { t: 'cut-end'; id: string; end: 0 | 1; fixed: Pt; parent: Poly }
-  | { t: 'draw'; start: Pt; cur: Pt; sx: number; sy: number };
+  | { t: 'draw'; start: Pt; cur: Pt; sx: number; sy: number }
+  | { t: 'view'; x: number; y: number };
+
+/** Zoom maximal de la vue (100 % = montage entier dans la fenêtre). */
+export const MAX_VIEW_ZOOM = 16;
 
 interface CellEls { g: SVGGElement; clip: SVGPolygonElement; base: SVGPolygonElement; img: SVGImageElement; warn: SVGGElement; dup: SVGGElement }
 
@@ -49,6 +53,14 @@ export class Editor {
   private els = new Map<string, CellEls>();
   private lastWheel = 0;
   private emitTimer = 0;
+  /** Vue : zoom (1 = page entière) et point central en mm (null = centre de la page). */
+  private zoom = 1;
+  private center: Pt | null = null;
+  private viewDims = '';
+  private spaceHeld = false;
+
+  /** Appelé quand le zoom de la vue change (pour l'indicateur de zoom). */
+  onView?: (zoom: number) => void;
 
   /** Appelé quand la sélection ou le mode change (pour la barre d'outils). */
   onUi?: () => void;
@@ -92,8 +104,7 @@ export class Editor {
   render(): void {
     const doc = this.store.doc, s = doc.settings;
     this.cells = computeCells(doc.root, s);
-    const pad = Math.max(s.widthMm, s.heightMm) * 0.03;
-    this.svg.setAttribute('viewBox', `${-pad} ${-pad} ${s.widthMm + 2 * pad} ${s.heightMm + 2 * pad}`);
+    this.applyView();
     this.page.setAttribute('width', String(s.widthMm));
     this.page.setAttribute('height', String(s.heightMm));
     this.page.setAttribute('fill', s.bg);
@@ -155,6 +166,66 @@ export class Editor {
     }
     this.renderOverlay();
   }
+
+  // ---------------------------------------------------------------- vue (zoom et déplacement)
+
+  private pageCenter(): Pt {
+    const s = this.store.doc.settings;
+    return { x: s.widthMm / 2, y: s.heightMm / 2 };
+  }
+
+  private applyView(): void {
+    const s = this.store.doc.settings;
+    const dims = `${s.widthMm}x${s.heightMm}`;
+    if (dims !== this.viewDims) { this.viewDims = dims; this.zoom = 1; this.center = null; } // nouveau format : vue d'ensemble
+    const pad = Math.max(s.widthMm, s.heightMm) * 0.03;
+    const w = (s.widthMm + 2 * pad) / this.zoom, h = (s.heightMm + 2 * pad) / this.zoom;
+    const c = this.center ?? this.pageCenter();
+    this.svg.setAttribute('viewBox', `${c.x - w / 2} ${c.y - h / 2} ${w} ${h}`);
+    this.onView?.(this.zoom);
+  }
+
+  /** Le centre de la vue reste sur la page : on ne peut pas la perdre de vue. */
+  private clampCenter(p: Pt): Pt {
+    const s = this.store.doc.settings;
+    return { x: Math.min(s.widthMm, Math.max(0, p.x)), y: Math.min(s.heightMm, Math.max(0, p.y)) };
+  }
+
+  /** Zoom de la vue autour d'un point (le point sous le curseur reste fixe). */
+  zoomBy(factor: number, at?: Pt): void {
+    const z = Math.min(MAX_VIEW_ZOOM, Math.max(1, this.zoom * factor));
+    if (z === this.zoom) return;
+    const c = this.center ?? this.pageCenter();
+    const p = at ?? c;
+    const k = this.zoom / z;
+    this.center = z === 1 ? null : this.clampCenter({ x: p.x + (c.x - p.x) * k, y: p.y + (c.y - p.y) * k });
+    this.zoom = z;
+    this.applyView();
+    this.renderOverlay();
+  }
+
+  /** Retour à la vue d'ensemble (page entière). */
+  fitView(): void {
+    this.zoom = 1;
+    this.center = null;
+    this.applyView();
+    this.renderOverlay();
+  }
+
+  private panBy(dx: number, dy: number): void {
+    if (this.zoom <= 1) return;
+    const c = this.center ?? this.pageCenter();
+    this.center = this.clampCenter({ x: c.x + dx, y: c.y + dy });
+    this.applyView();
+  }
+
+  /** Espace maintenue : glisser déplace la vue. */
+  setSpaceHeld(held: boolean): void {
+    this.spaceHeld = held;
+    this.svg.classList.toggle('pan-ready', held);
+  }
+
+  get viewZoom(): number { return this.zoom; }
 
   private createCell(id: string): CellEls {
     const cp = el('clipPath', { id: clipId(id) }, this.defs);
@@ -276,6 +347,14 @@ export class Editor {
   // ---------------------------------------------------------------- souris
 
   private down(e: PointerEvent) {
+    // Espace + glisser, ou clic molette : déplacer la vue
+    if (e.button === 1 || (e.button === 0 && this.spaceHeld)) {
+      e.preventDefault();
+      this.drag = { t: 'view', x: e.clientX, y: e.clientY };
+      this.svg.setPointerCapture(e.pointerId);
+      this.svg.classList.add('panning');
+      return;
+    }
     if (e.button !== 0) return;
     const pt = this.toMm(e);
     const target = e.target as Element;
@@ -321,6 +400,13 @@ export class Editor {
     }
     const doc = this.store.doc;
     switch (d.t) {
+      case 'view': {
+        const k = this.mmPerPx();
+        this.panBy(-(e.clientX - d.x) * k, -(e.clientY - d.y) * k);
+        d.x = e.clientX;
+        d.y = e.clientY;
+        break;
+      }
       case 'pan': {
         const crop = doc.crops[d.id];
         const photo = crop && this.lib.get(crop.photo);
@@ -372,6 +458,7 @@ export class Editor {
     this.drag = null;
     if (this.svg.hasPointerCapture(e.pointerId)) this.svg.releasePointerCapture(e.pointerId);
     if (!d) return;
+    if (d.t === 'view') { this.svg.classList.remove('panning'); this.renderOverlay(); return; }
     const doc = this.store.doc;
     if (d.t === 'swap') {
       if (d.over && d.over !== d.from) {
@@ -402,19 +489,43 @@ export class Editor {
   }
 
   private wheel(e: WheelEvent) {
-    if (this.mode !== 'select') return;
     const pt = this.toMm(e);
-    const id = this.leafAt(pt);
+    // ⌘ + molette, ou pincement du trackpad (Chrome le signale avec ctrlKey) : zoom de la vue
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      // un cran de molette = au plus ±25 % ; le pincement envoie de petits pas, plus fins
+      const f = Math.exp(-e.deltaY * (e.ctrlKey && !e.metaKey ? 0.01 : 0.0025));
+      this.zoomBy(Math.min(1.25, Math.max(0.8, f)), pt);
+      return;
+    }
+    // ⇧ + molette : déplacer la vue
+    if (e.shiftKey) {
+      if (this.zoom > 1) {
+        e.preventDefault();
+        const k = this.mmPerPx();
+        this.panBy((e.deltaX || e.deltaY) * k, e.deltaX ? e.deltaY * k : 0);
+      }
+      return;
+    }
+    const id = this.mode === 'select' ? this.leafAt(pt) : null;
     const doc = this.store.doc;
     const crop = id ? doc.crops[id] : undefined;
     const photo = crop && this.lib.get(crop.photo);
     const bb = id ? this.bbOf(id) : null;
-    if (!id || !crop || !photo || !bb) return;
+    if (!id || !crop || !photo || !bb) {
+      // ailleurs que sur une photo : la molette déplace la vue quand on est zoomé
+      if (this.zoom > 1) {
+        e.preventDefault();
+        const k = this.mmPerPx();
+        this.panBy(e.deltaX * k, e.deltaY * k);
+      }
+      return;
+    }
     e.preventDefault();
     const now = performance.now();
     if (now - this.lastWheel > 700) this.store.checkpoint();
     this.lastWheel = now;
-    const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002));
+    const factor = Math.exp(-e.deltaY * 0.002);
     doc.crops[id] = zoomCrop(bb, photo.w, photo.h, crop, factor, pt);
     this.render();
     this.scheduleEmit();

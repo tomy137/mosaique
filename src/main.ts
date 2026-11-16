@@ -57,8 +57,8 @@ editor.onToast = (m) => toast(m);
 
 function updateHelp() {
   $('help').textContent = editor.mode === 'cut'
-    ? 'Clic : coupe droite au point cliqué · Glisser : coupe libre (aimantée H/V, ⇧ force H/V, ⌥ angle libre) · Échap : sélection'
-    : 'Glisser une photo : recadrer · Molette : zoom · Double-clic : recentrer · ⇧+glisser : échanger deux photos · Glisser une coupe ou ses poignées pour la déplacer (⌥ sans aimant)';
+    ? 'Clic : coupe droite au point cliqué · Glisser : coupe libre (aimantée H/V, ⇧ force H/V, ⌥ angle libre) · Échap : sélection · ⌘+molette : zoom de la vue · Espace+glisser : se déplacer'
+    : 'Glisser une photo : recadrer · Molette : zoom photo · Double-clic : recentrer · ⇧+glisser : échanger · ⌘+molette ou pincer : zoom de la vue · Espace+glisser : se déplacer · ⇧1 : vue d’ensemble';
 }
 
 const hhmm = () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -1016,6 +1016,17 @@ lib.subscribe(() => renderLibrary());
 
 // ------------------------------------------------------------------ clavier
 
+window.addEventListener('keyup', (e) => { if (e.code === 'Space') editor.setSpaceHeld(false); });
+window.addEventListener('blur', () => editor.setSpaceHeld(false));
+
+// ------------------------------------------------------------------ zoom de la vue
+
+editor.onView = (z) => { $('zoom-level').textContent = `${Math.round(z * 100)} %`; };
+$('zoom-in').onclick = () => editor.zoomBy(1.25);
+$('zoom-out').onclick = () => editor.zoomBy(0.8);
+$('zoom-level').onclick = () => editor.fitView();
+editor.onView(editor.viewZoom);
+
 window.addEventListener('keydown', (e) => {
   const t = e.target as HTMLElement;
   const k = e.key.toLowerCase();
@@ -1025,6 +1036,16 @@ window.addEventListener('keydown', (e) => {
   if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? store.redo() : store.undo(); return; }
   if (mod && k === 'y') { e.preventDefault(); store.redo(); return; }
   if (mod) return;
+  // vue : Espace maintenue pour se déplacer, + / − pour zoomer, ⇧1 pour la vue d'ensemble
+  if (e.code === 'Space') {
+    e.preventDefault(); // sinon Espace « clique » le dernier bouton utilisé
+    if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
+    if (!e.repeat) editor.setSpaceHeld(true);
+    return;
+  }
+  if (e.code === 'Digit1' && e.shiftKey) { e.preventDefault(); editor.fitView(); return; }
+  if (k === '+' || k === '=') { editor.zoomBy(1.25); return; }
+  if (k === '-' || k === '_') { editor.zoomBy(0.8); return; }
   if (document.body.classList.contains('presentation') && (k === 'escape' || k === 'p')) { setPresentation(false); return; }
   switch (k) {
     case 'v': editor.setMode('select'); break;
