@@ -1,11 +1,11 @@
 // Éditeur interactif en SVG (unités : mm).
 
-import { computeCells, getLine, isValid, lineNodeId, setLine, type Cells, type CutInfo } from '../geometry/bsp';
+import { computeCells, getLine, isValid, setLine, type Cells, type CutInfo } from '../geometry/bsp';
 import {
   add, bbox, closestOnBoundary, dist, dot, len, lineThroughPolygon, mul, pointInPolygon, polyToPoints, sub,
   type Poly, type Pt,
 } from '../geometry/polygon';
-import { mergeAt, quickCut, snapAngle, straightenCut, trySplit } from '../layout/edit';
+import { mergeAt, quickCut, snapAngle, straightenCut, trySplit, type MergeResult } from '../layout/edit';
 import { defaultCrop, effectiveDpi, panCrop, placement, zoomCrop } from '../photos/crop';
 import type { Library } from '../photos/library';
 import type { Store } from '../store';
@@ -624,9 +624,19 @@ export class Editor {
     const s = this.sel;
     if (!s) return;
     if (s.kind === 'cut') {
-      const nodeId = lineNodeId(s.id); // supprimer un trait de moulinet supprime tout le moulinet
-      this.store.change((d) => mergeAt(d, nodeId, this.cells));
-      this.sel = this.cells.leaves.has(nodeId) ? { kind: 'cell', id: nodeId } : null;
+      // seules les cases qui bordent le trait fusionnent ; le reste de la mise en page ne bouge pas
+      let res: MergeResult = { ok: false, dropped: [] };
+      this.store.change((d) => { res = mergeAt(d, s.id, this.cells); });
+      if (!res.ok) {
+        this.store.dropNoopCheckpoint();
+        this.onToast?.(res.reason ?? 'Impossible de supprimer ce trait.');
+      } else {
+        this.sel = res.cellId && this.cells.leaves.has(res.cellId) ? { kind: 'cell', id: res.cellId } : null;
+        if (res.dropped.length) {
+          this.onToast?.(`${res.dropped.length} photo(s) retirée(s) du montage (toujours dans la bibliothèque) : ${res.dropped.join(', ')}. ⌘Z pour annuler.`);
+        }
+      }
+      this.renderOverlay();
     } else if (this.store.doc.crops[s.id]) {
       this.store.change((d) => { delete d.crops[s.id]; });
     }

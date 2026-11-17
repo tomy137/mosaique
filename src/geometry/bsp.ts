@@ -173,6 +173,35 @@ export function removeCut(root: BspNode, id: string): string[] {
   return removed;
 }
 
+/**
+ * Supprime une coupe en la remplaçant par l'un de ses deux enfants : les coupes de cet enfant (droites infinies,
+ * bornées par leur case) s'étendent d'elles-mêmes sur la zone de l'autre côté, qui disparaît.
+ * L'enfant gardé prend l'identifiant du nœud ; ses descendants sont renommés en conséquence.
+ * Renvoie la table des identifiants renommés (ancien → nouveau) et les feuilles retirées.
+ */
+export function promoteChild(root: BspNode, nodeId: string, keep: 0 | 1): { renamed: Map<string, string>; removed: string[] } {
+  const node = findNode(root, nodeId);
+  if (!node?.cut || node.children?.length !== 2) throw new Error(`Coupe introuvable : ${nodeId}`);
+  const kept = node.children[keep];
+  const removed = leafIds(node.children[1 - keep]);
+  const renamed = new Map<string, string>();
+  const rename = (n: BspNode) => {
+    const id = nodeId + n.id.slice(kept.id.length);
+    renamed.set(n.id, id);
+    n.id = id;
+    n.children?.forEach(rename);
+  };
+  delete node.cut;
+  delete node.pin;
+  delete node.children;
+  if (kept.cut) node.cut = kept.cut;
+  if (kept.pin) node.pin = kept.pin;
+  if (kept.children) node.children = kept.children;
+  renamed.set(kept.id, nodeId);
+  node.children?.forEach(rename);
+  return { renamed, removed };
+}
+
 export function scaleTree(root: BspNode, sx: number, sy: number): void {
   forEachLine(root, (c, set) => set({ p: { x: c.p.x * sx, y: c.p.y * sy }, q: { x: c.q.x * sx, y: c.q.y * sy } }));
 }

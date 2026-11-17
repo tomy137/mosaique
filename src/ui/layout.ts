@@ -42,6 +42,33 @@ export function generateLayout(newSeed = true) {
   genInfo();
 }
 
+/** Nouvelle mise en page avec exactement les photos de ce montage (ni plus, ni moins). */
+function rearrange() {
+  const photos = [...new Set(Object.values(store.doc.crops).map((c) => c.photo))];
+  if (!photos.length) { toast('Aucune photo dans ce montage : « Générer » pour en placer.'); return; }
+  const missing = photos.filter((p) => !lib.get(p));
+  if (missing.length) {
+    toast(`${missing.length} photo(s) du montage pas encore chargée(s) : rouvrir le dossier avant de réarranger.`, 8000);
+    return;
+  }
+  seed = Math.floor(Math.random() * 1e9);
+  const others = new Set([...lib.photos.keys()].filter((n) => !photos.includes(n)));
+  store.change((d) => applyGenerate(d, lib, {
+    count: photos.length, seed, obliquityDeg: num('gen-angle'), obliqueShare: num('gen-share') / 100, minAreaFrac: num('gen-min') / 100,
+    mode: layoutMode(),
+  }, others));
+  genInfo();
+  toast(`${photos.length} photo(s) réarrangée(s). Recliquer pour une autre proposition, ⌘Z pour revenir.`, 5000);
+}
+
+/** Retire toutes les photos du montage ; les cases restent. */
+function clearPhotos() {
+  const n = Object.keys(store.doc.crops).length;
+  if (!n) { toast('Le montage n’a déjà aucune photo.'); return; }
+  store.change((d) => { d.crops = {}; });
+  toast(`${n} photo(s) retirée(s) du montage, cases gardées (toujours dans la bibliothèque). ⌘Z pour annuler.`, 6000);
+}
+
 function fillEmptyCells() {
   let n = 0;
   store.change((d) => { n = fillEmpty(d, lib, excluded()); });
@@ -63,5 +90,7 @@ export function initLayout() {
   $('btn-gen').onclick = () => generateLayout(true);
   $('btn-variant').onclick = () => { seed++; generateLayout(false); };
   $('btn-fill').onclick = fillEmptyCells;
+  $('btn-rearrange').onclick = rearrange;
+  $('btn-clear-photos').onclick = clearPhotos;
   $('btn-blank').onclick = () => store.change((d) => { d.root = { id: 'r' }; d.crops = {}; });
 }
