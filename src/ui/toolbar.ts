@@ -1,5 +1,6 @@
 // Barre d'outils (modes, annuler, informations de la sélection), aide, plein écran et zoom de la vue.
 
+import type { TextBox } from '../types';
 import { $ } from './dom';
 import { editor, store, usedElsewhere } from './state';
 
@@ -26,8 +27,49 @@ function bold(text: string, low: boolean): HTMLElement {
   return b;
 }
 
-/** Infos et actions de la case ou de la coupe sélectionnée. */
+/** Bouton à bascule (gras, alignement, bandeau). */
+function toggle(label: string, title: string, on: boolean, fn: () => void): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.title = title;
+  b.classList.toggle('on', on);
+  b.onclick = fn;
+  return b;
+}
+
+/** Réglages du texte sélectionné : taille, gras, alignement, couleur, bandeau. */
+function textItems(t: TextBox): HTMLElement[] {
+  const size = document.createElement('input');
+  size.type = 'number';
+  size.min = '4';
+  size.max = '400';
+  size.value = String(t.sizePt);
+  size.className = 'ctx-num';
+  size.title = 'Taille du texte (points)';
+  size.onchange = () => { const v = Number(size.value); if (v >= 4 && v <= 400) editor.updateText({ sizePt: v }); };
+  const color = document.createElement('input');
+  color.type = 'color';
+  color.className = 'ctx-color';
+  color.value = /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : '#ffffff';
+  color.title = 'Couleur du texte';
+  color.onchange = () => editor.updateText({ color: color.value });
+  return [
+    size,
+    toggle('G', 'Gras', !!t.bold, () => editor.updateText({ bold: !t.bold })),
+    toggle('⇤', 'Aligner à gauche', t.align === 'left', () => editor.updateText({ align: 'left' })),
+    toggle('≡', 'Centrer', t.align === 'center', () => editor.updateText({ align: 'center' })),
+    toggle('⇥', 'Aligner à droite', t.align === 'right', () => editor.updateText({ align: 'right' })),
+    color,
+    toggle('▬ Bandeau', 'Fond sombre semi-transparent derrière le texte', !!t.bg, () => editor.updateText({ bg: t.bg ? undefined : 'rgba(0, 0, 0, 0.45)' })),
+    contextButton('Modifier', '↵', 'Modifier le texte (double-clic ou Entrée)', () => editor.editText(t.id)),
+    contextButton('Supprimer', '⌫', 'Supprimer ce texte (Suppr)', () => editor.deleteSelection()),
+  ];
+}
+
+/** Infos et actions de la case, de la coupe ou du texte sélectionné. */
 function contextItems(): HTMLElement[] {
+  const text = editor.textInfo();
+  if (text) return textItems(text);
   const info = editor.cellInfo();
   if (info) {
     const span = document.createElement('span');
@@ -62,6 +104,7 @@ export function renderToolbar() {
   $<HTMLButtonElement>('btn-undo').disabled = !store.canUndo;
   $<HTMLButtonElement>('btn-redo').disabled = !store.canRedo;
   $('context').replaceChildren(...contextItems());
+  $('context').classList.toggle('text-ctx', !!editor.textInfo());
   $('help').textContent = HELP[editor.mode];
 }
 
@@ -85,6 +128,7 @@ export function initToolbar() {
   editor.onUi = renderToolbar;
   $('mode-select').onclick = () => editor.setMode('select');
   $('mode-cut').onclick = () => editor.setMode('cut');
+  $('btn-text').onclick = () => editor.addText();
   $('btn-undo').onclick = () => store.undo();
   $('btn-redo').onclick = () => store.redo();
   $('btn-present').onclick = () => setPresentation(true);

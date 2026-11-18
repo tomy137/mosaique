@@ -9,14 +9,15 @@ import { mergeAt, quickCut, snapAngle, straightenCut, trySplit, type MergeResult
 import { defaultCrop, effectiveDpi, panCrop, placement, zoomCrop } from '../photos/crop';
 import type { Library } from '../photos/library';
 import type { Store } from '../store';
-import type { Cut } from '../types';
+import type { Cut, TextBox } from '../types';
+import { FONT_FAMILY, layoutText, LINE, textSizeMm, textSvg } from './text';
 
 const NS = 'http://www.w3.org/2000/svg';
 export const PHOTO_MIME = 'application/x-mosaique-photo';
 export const LOW_DPI = 150;
 
 export type Mode = 'select' | 'cut';
-export type Selection = { kind: 'cell' | 'cut'; id: string } | null;
+export type Selection = { kind: 'cell' | 'cut' | 'text'; id: string } | null;
 
 type Drag =
   | { t: 'pan'; id: string; last: Pt }
@@ -24,7 +25,9 @@ type Drag =
   | { t: 'cut-move'; id: string; start: Pt; p0: Pt; q0: Pt; n: Pt }
   | { t: 'cut-end'; id: string; end: 0 | 1; fixed: Pt; parent: Poly }
   | { t: 'draw'; start: Pt; cur: Pt; sx: number; sy: number }
-  | { t: 'view'; x: number; y: number };
+  | { t: 'view'; x: number; y: number }
+  | { t: 'text-move'; id: string; start: Pt; x0: number; y0: number }
+  | { t: 'text-resize'; id: string; start: Pt; w0: number };
 
 /** Portée de l'aimant horizontal / vertical, en pixels à l'écran. */
 const SNAP_PX = 8;
@@ -46,6 +49,9 @@ export class Editor {
   private defs: SVGDefsElement;
   private page: SVGRectElement;
   private gCells: SVGGElement;
+  private gTexts: SVGGElement;
+  private host: HTMLElement;
+  private editing: { id: string; area: HTMLTextAreaElement } | null = null;
   private gGuides: SVGGElement;
   private gNeighbor: SVGGElement;
   private gOverlay: SVGGElement;
@@ -95,12 +101,14 @@ export class Editor {
     el('feDropShadow', { dx: 0, dy: 0, stdDeviation: 3, 'flood-opacity': 0.35 }, shadow);
     this.page = el('rect', { x: 0, y: 0, filter: 'url(#page-shadow)', class: 'page' }, this.svg);
     this.gCells = el('g', { class: 'cells' }, this.svg);
+    this.gTexts = el('g', { class: 'texts' }, this.svg);
     this.gGuides = el('g', { class: 'guides' }, this.svg);
     this.gNeighbor = el('g', { class: 'neighbor' }, this.svg);
     this.gOverlay = el('g', { class: 'overlay' }, this.svg);
     // la page voisine s'ouvre d'un clic ; elle ne participe pas aux gestes de l'éditeur
     this.gNeighbor.addEventListener('pointerdown', (e) => e.stopPropagation());
     host.appendChild(this.svg);
+    this.host = host;
 
     this.svg.addEventListener('pointerdown', (e) => this.down(e));
     this.svg.addEventListener('pointermove', (e) => this.move(e));
@@ -135,6 +143,9 @@ export class Editor {
 
     if (this.sel?.kind === 'cell' && !this.cells.leaves.has(this.sel.id)) this.sel = null;
     if (this.sel?.kind === 'cut' && !this.cells.cuts.some((c) => c.id === this.sel!.id)) this.sel = null;
+    if (this.sel?.kind === 'text' && !this.textById(this.sel.id)) this.sel = null;
+    if (this.editing && !this.textById(this.editing.id)) { this.editing.area.remove(); this.editing = null; }
+    this.renderTexts();
 
     const seen = new Set<string>();
     const badge = Math.max(s.widthMm, s.heightMm) * 0.009;
@@ -379,6 +390,15 @@ export class Editor {
       el('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: cls }, o);
       el('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: 'cut-hit', 'data-kind': 'cut', 'data-id': c.id }, o);
     }
+    const selText = this.sel?.kind === 'text' ? this.textById(this.sel.id) : null;
+    if (selText && !this.editing) {
+      const h = layoutText(selText).h;
+      el('rect', { x: selText.x, y: selText.y, width: selText.w, height: h, class: 'sel-text' }, o);
+      el('rect', {
+        x: selText.x + selText.w - 3 * px, y: selText.y + h / 2 - 8 * px, width: 6 * px, height: 16 * px, rx: 2 * px,
+        class: 'handle text-handle', 'data-kind': 'text-handle',
+      }, o);
+    }
     const selCut = this.selectedCut();
     if (selCut) {
       selCut.seg.forEach((p, i) => el('circle', { cx: p.x, cy: p.y, r: 6 * px, class: 'handle', 'data-kind': 'handle', 'data-end': i }, o));
@@ -465,8 +485,19 @@ export class Editor {
     const kind = target.getAttribute('data-kind');
     const doc = this.store.doc;
 
+    const textHit = (target.closest('[data-text]') as Element | null)?.getAttribute('data-text');
+    if (this.editing) this.finishTextEdit();
     if (this.mode === 'cut') {
       this.drag = { t: 'draw', start: pt, cur: pt, sx: e.clientX, sy: e.clientY };
+    } else if (kind === 'text-handle' && this.sel?.kind === 'text') {
+      const t = this.textById(this.sel.id)!;
+      this.store.checkpoint();
+      this.drag = { t: 'text-resize', id: t.id, start: pt, w0: t.w };
+    } else if (textHit) {
+      const t = this.textById(textHit)!;
+      this.sel = { kind: 'text', id: t.id };
+      this.store.checkpoint();
+      this.drag = { t: 'text-move', id: t.id, start: pt, x0: t.x, y0: t.y };
     } else if (kind === 'handle' && this.selectedCut()) {
       const c = this.selectedCut()!;
       const end = Number(target.getAttribute('data-end')) as 0 | 1;
@@ -520,6 +551,16 @@ export class Editor {
           this.render();
         }
         d.last = pt;
+        break;
+      }
+      case 'text-move': {
+        const t = this.textById(d.id);
+        if (t) { t.x = d.x0 + pt.x - d.start.x; t.y = d.y0 + pt.y - d.start.y; this.render(); }
+        break;
+      }
+      case 'text-resize': {
+        const t = this.textById(d.id);
+        if (t) { t.w = Math.max(textSizeMm(t) * 2, d.w0 + pt.x - d.start.x); this.render(); }
         break;
       }
       case 'swap':
@@ -648,6 +689,8 @@ export class Editor {
 
   private dblclick(e: MouseEvent) {
     if (this.mode !== 'select') return;
+    const textHit = ((e.target as Element).closest('[data-text]') as Element | null)?.getAttribute('data-text');
+    if (textHit) { this.editText(textHit); return; }
     const id = this.leafAt(this.toMm(e));
     const crop = id ? this.store.doc.crops[id] : undefined;
     if (id && crop) this.store.change((d) => { d.crops[id] = { ...crop, fx: 0.5, fy: 0.5, zoom: 1 }; });
@@ -705,9 +748,123 @@ export class Editor {
         }
       }
       this.renderOverlay();
+    } else if (s.kind === 'text') {
+      this.store.change((d) => { d.texts = (d.texts ?? []).filter((t) => t.id !== s.id); });
+      this.sel = null;
     } else if (this.store.doc.crops[s.id]) {
       this.store.change((d) => { delete d.crops[s.id]; });
     }
+    this.onUi?.();
+  }
+
+  // ---------------------------------------------------------------- textes
+
+  private textById(id: string): TextBox | undefined {
+    return this.store.doc.texts?.find((t) => t.id === id);
+  }
+
+  private renderTexts(): void {
+    const items = (this.store.doc.texts ?? []).map((t) => {
+      const g = textSvg(t, { 'data-text': t.id, class: `text-box${this.editing?.id === t.id ? ' editing' : ''}` });
+      // zone cliquable sur tout le bloc, pas seulement sur les lettres
+      el('rect', { x: t.x, y: t.y, width: t.w, height: layoutText(t).h, class: 'text-hit' }, g);
+      return g;
+    });
+    this.gTexts.replaceChildren(...items);
+  }
+
+  /** Texte sélectionné, pour la barre d'outils. */
+  textInfo(): TextBox | null {
+    return this.sel?.kind === 'text' ? this.textById(this.sel.id) ?? null : null;
+  }
+
+  /** Modifie le texte sélectionné (taille, gras, alignement, couleur, bandeau). */
+  updateText(patch: Partial<TextBox>): void {
+    const id = this.sel?.kind === 'text' ? this.sel.id : null;
+    if (!id) return;
+    this.store.change((d) => {
+      const t = d.texts?.find((x) => x.id === id);
+      if (t) Object.assign(t, patch);
+      if (t && patch.bg === undefined && 'bg' in patch) delete t.bg;
+    });
+  }
+
+  /** Nouveau bloc de texte au centre de la vue, aussitôt en édition. */
+  addText(text = 'Titre'): void {
+    const s = this.store.doc.settings;
+    const c = this.center ?? { x: s.widthMm / 2, y: s.heightMm / 2 };
+    const sizePt = Math.max(10, Math.round(s.widthMm / 12));
+    const w = Math.min(s.widthMm * 0.6, Math.max(s.widthMm * 0.3, 60));
+    const cx = Math.min(s.widthMm - w / 2, Math.max(w / 2, c.x));
+    const t: TextBox = {
+      id: `t${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`,
+      x: cx - w / 2, y: Math.min(s.heightMm - 20, Math.max(0, c.y - (sizePt * 25.4) / 72 / 2)), w,
+      text, sizePt, align: 'center', color: '#ffffff', bold: true, bg: 'rgba(0, 0, 0, 0.45)',
+    };
+    this.store.change((d) => { (d.texts ??= []).push(t); });
+    this.sel = { kind: 'text', id: t.id };
+    this.setMode('select');
+    this.editText(t.id, true);
+  }
+
+  /** Édition du texte dans une zone de saisie posée exactement sur le bloc. */
+  editText(id: string, selectAll = false): void {
+    const t = this.textById(id);
+    const m = this.svg.getScreenCTM();
+    if (!t || !m) return;
+    this.finishTextEdit();
+    this.store.checkpoint();
+    const area = document.createElement('textarea');
+    area.className = 'text-edit';
+    area.value = t.text;
+    area.spellcheck = false;
+    const hr = this.host.getBoundingClientRect();
+    const L = layoutText(t);
+    Object.assign(area.style, {
+      left: `${m.a * t.x + m.e - hr.left}px`,
+      top: `${m.d * t.y + m.f - hr.top}px`,
+      width: `${m.a * t.w}px`,
+      minHeight: `${m.d * L.h}px`,
+      padding: `${m.d * L.pad}px`,
+      fontSize: `${m.d * L.size}px`,
+      lineHeight: String(LINE),
+      fontWeight: t.bold ? '600' : '400',
+      fontFamily: FONT_FAMILY,
+      textAlign: t.align,
+      color: t.color,
+      background: t.bg ?? 'rgba(0, 0, 0, 0.25)',
+    });
+    this.host.appendChild(area);
+    this.editing = { id, area };
+    this.sel = { kind: 'text', id };
+    this.render();
+    area.focus();
+    if (selectAll) area.select();
+    area.oninput = () => {
+      const cur = this.textById(id);
+      if (cur) { cur.text = area.value; this.render(); }
+      area.style.height = 'auto';
+      area.style.height = `${area.scrollHeight}px`;
+    };
+    area.onkeydown = (e) => {
+      if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) { e.preventDefault(); this.finishTextEdit(); }
+    };
+    area.onblur = () => this.finishTextEdit();
+  }
+
+  finishTextEdit(): void {
+    const ed = this.editing;
+    if (!ed) return;
+    this.editing = null;
+    ed.area.onblur = null;
+    ed.area.remove();
+    const t = this.textById(ed.id);
+    if (t && !t.text.trim()) {
+      this.store.doc.texts = this.store.doc.texts!.filter((x) => x.id !== ed.id);
+      this.sel = null;
+    }
+    this.store.dropNoopCheckpoint();
+    this.store.emit();
     this.onUi?.();
   }
 

@@ -6,6 +6,7 @@ import { bbox } from '../geometry/polygon';
 import { placement } from '../photos/crop';
 import type { Library } from '../photos/library';
 import type { Doc } from '../types';
+import { textSvg } from './text';
 
 const NS = 'http://www.w3.org/2000/svg';
 let uid = 0;
@@ -43,9 +44,6 @@ export function pageSvg(doc: Doc, lib: Library): SVGSVGElement {
     img.setAttribute('href', photo.url);
     svg.appendChild(img);
   }
-  for (const t of doc.texts ?? []) {
-    // aperçu du texte : une barre à sa place suffit à reconnaître la page
-    svg.appendChild(el('rect', { x: t.x, y: t.y, width: t.w, height: (t.sizePt * 0.3528) * 1.2, fill: t.color, opacity: 0.55, rx: 1 }));
-  }
+  for (const t of doc.texts ?? []) svg.appendChild(textSvg(t));
   return svg;
 }

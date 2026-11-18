@@ -5,6 +5,7 @@ import { bbox, type Poly } from '../geometry/polygon';
 import { placement } from '../photos/crop';
 import type { Library } from '../photos/library';
 import type { Doc, Settings } from '../types';
+import { drawText } from './text';
 
 /** Largeur d'impression de la page coupée, en pixels (sert d'échelle à l'export). */
 export const pxForPrint = (doc: Doc) => Math.round((doc.settings.widthMm / 25.4) * doc.settings.dpi);
@@ -59,6 +60,7 @@ export async function renderCanvas(
     ctx.restore();
     onProgress?.(++done, entries.length);
   }
+  for (const t of doc.texts ?? []) drawText(ctx, t, k);
   return canvas;
 }
 

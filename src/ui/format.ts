@@ -56,7 +56,10 @@ function resize(widthMm: number, heightMm: number, dpi = store.doc.settings.dpi)
   if (!(widthMm > 0 && heightMm > 0)) return;
   store.change((d) => {
     const sx = widthMm / d.settings.widthMm, sy = heightMm / d.settings.heightMm;
-    forEachPage(d, (p) => scaleTree(p.root, sx, sy)); // toutes les pages d'un album
+    forEachPage(d, (p) => {
+      scaleTree(p.root, sx, sy); // toutes les pages d'un album
+      for (const t of p.texts ?? []) { t.x *= sx; t.y *= sy; t.w *= sx; }
+    });
     d.settings.widthMm = widthMm;
     d.settings.heightMm = heightMm;
     d.settings.dpi = dpi;
@@ -125,7 +128,10 @@ export function initFormat() {
   $('btn-preset-save').onclick = savePreset;
   $('btn-preset-del').onclick = deletePreset;
   $('btn-rotate').onclick = () => store.change((d) => {
-    forEachPage(d, (p) => transpose(p.root));
+    forEachPage(d, (p) => {
+      transpose(p.root);
+      for (const t of p.texts ?? []) [t.x, t.y] = [t.y, t.x];
+    });
     [d.settings.widthMm, d.settings.heightMm] = [d.settings.heightMm, d.settings.widthMm];
   });
   // largeur, hauteur et dpi : appliqués à la validation, pour ne pas déformer le montage à chaque chiffre

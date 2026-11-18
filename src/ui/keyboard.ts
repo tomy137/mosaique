@@ -15,6 +15,8 @@ function letterActions(panels: Panels): Record<string, (e: KeyboardEvent) => voi
   return {
     v: () => editor.setMode('select'),
     c: () => editor.setMode('cut'),
+    t: (e) => { e.preventDefault(); editor.addText(); },
+    enter: (e) => { const t = editor.textInfo(); if (t) { e.preventDefault(); editor.editText(t.id); } },
     escape: () => { toast(''); editor.sel = null; editor.setMode('select'); },
     delete: (e) => { e.preventDefault(); editor.deleteSelection(); },
     backspace: (e) => { e.preventDefault(); editor.deleteSelection(); },
