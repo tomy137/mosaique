@@ -4,12 +4,15 @@
 import { pageSvg } from '../render/thumb';
 import {
   albumPages, duplicatePage, goToPage, insertPage, isAlbum, movePage, pageCount, pageDoc, pageIndex, pageLabel,
-  removePage, spreadOf, spreads, toAlbum,
+  removePage, setPages, spreadOf, spreads, toAlbum,
 } from '../storage/album';
+import { distribute } from '../layout/album';
+import { layoutPhotos } from '../layout/edit';
 import { pref } from '../storage/local';
 import { newDoc } from '../storage/doc';
 import { uniqueName, montageName } from '../storage/montages';
 import { $, num } from './dom';
+import { avoidOthers, genParams } from './layout';
 import { createMontage, renderMontages } from './montages';
 import { app, editor, lib, store } from './state';
 import { toast } from './toast';
@@ -114,6 +117,7 @@ function pageButton(i: number, current: number): HTMLElement {
 function renderPagesNow() {
   const album = isAlbum(store.doc);
   $('pages').hidden = !album;
+  $('album-panel').hidden = !album;
   document.body.classList.toggle('album', album);
   renderMontages(); // titre « Album › p. 3 »
   if (!album) { thumbCache.clear(); return; }
@@ -133,6 +137,7 @@ function renderPagesNow() {
     return g;
   }));
   $('page-label').textContent = `${pageLabel(cur)} · ${n} pages`;
+  renderDistInfo();
   $<HTMLButtonElement>('page-prev').disabled = cur === 0;
   $<HTMLButtonElement>('page-next').disabled = cur === n - 1;
   $<HTMLButtonElement>('page-del').disabled = n < 2;
@@ -144,6 +149,66 @@ function renderPagesNow() {
 export function renderPages() {
   clearTimeout(renderTimer);
   renderTimer = window.setTimeout(renderPagesNow, 120);
+}
+
+// ------------------------------------------------------------------ répartition chronologique
+
+const fmtDay = (t: number) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** Pages visées par la répartition (bornes saisies, ramenées à des valeurs possibles). */
+function distRange(): [number, number] {
+  const n = pageCount(store.doc);
+  const from = Math.max(0, Math.min(199, Math.round(num('dist-from')) || 0));
+  const toRaw = $<HTMLInputElement>('dist-to').value;
+  const to = Math.max(from, Math.min(199, toRaw === '' ? n - 1 : Math.round(Number(toRaw))));
+  return [from, to];
+}
+
+/** Photos à répartir : celles de la bibliothèque, sauf celles des pages hors plage (et des autres montages si demandé). */
+function availablePhotos(from: number, to: number) {
+  const outside = new Set<string>();
+  albumPages(store.doc).forEach((p, i) => {
+    if (i < from || i > to) for (const c of Object.values(p.crops)) outside.add(c.photo);
+  });
+  if (avoidOthers()) for (const name of app.usage.keys()) outside.add(name);
+  return [...lib.photos.values()].filter((p) => !outside.has(p.name));
+}
+
+function renderDistInfo() {
+  const toInput = $<HTMLInputElement>('dist-to');
+  if (document.activeElement !== toInput && toInput.value === '') toInput.placeholder = String(pageCount(store.doc) - 1);
+  const [from, to] = distRange();
+  const photos = availablePhotos(from, to);
+  const n = to - from + 1;
+  const undated = photos.filter((p) => !p.dateExif).length;
+  const dates = photos.map((p) => p.date).filter(Boolean);
+  $('dist-info').textContent = photos.length
+    ? `${photos.length} photo(s) pour ${n} page(s)${dates.length ? `, du ${fmtDay(Math.min(...dates))} au ${fmtDay(Math.max(...dates))}` : ''}.`
+      + `${undated ? ` ${undated} sans date de prise de vue : rangée(s) selon la date du fichier.` : ''}`
+    : 'Aucune photo libre pour ces pages : ajouter des photos, ou élargir la plage.';
+  $('sum-album').textContent = `${pageCount(store.doc)} pages`;
+}
+
+function distributePhotos() {
+  if (!isAlbum(store.doc)) return;
+  const [from, to] = distRange();
+  const n = to - from + 1;
+  const photos = availablePhotos(from, to);
+  if (!photos.length) { toast('Aucune photo à répartir : ajouter des photos, ou élargir la plage de pages.'); return; }
+  const groups = distribute(photos, n, { min: num('dist-min') || 1, max: num('dist-max') || 6 });
+  const params = genParams();
+  const seed = Math.floor(Math.random() * 1e9);
+  const layouts = groups.map((names, k) => {
+    const list = names.map((name) => lib.get(name)!).filter(Boolean);
+    return list.length ? layoutPhotos(store.doc.settings, list, { ...params, count: list.length, seed: seed + k * 7919 }) : { root: { id: 'r' }, crops: {} };
+  });
+  const added = Math.max(0, to + 1 - pageCount(store.doc));
+  store.change((d) => setPages(d, from, layouts));
+  thumbCache.clear();
+  neighborCache.clear();
+  const sizes = groups.map((g) => g.length);
+  toast(`${photos.length} photo(s) réparties sur ${pageLabel(from)} à ${pageLabel(to)} (${Math.min(...sizes)} à ${Math.max(...sizes)} par page)`
+    + `${added ? `, ${added} page(s) ajoutée(s)` : ''}. Chaque page se retouche ensuite ; ⌘Z annule tout.`, 9000);
 }
 
 let deleteArmed = 0;
@@ -181,6 +246,8 @@ export function initAlbum() {
     toast('Page dupliquée : ses photos sont maintenant aussi signalées sur la copie.', 4000);
   };
   $('page-del').onclick = deletePage;
+  $('btn-distribute').onclick = distributePhotos;
+  for (const id of ['dist-from', 'dist-to', 'gen-exclude']) $(id).addEventListener('change', renderDistInfo);
   $('page-spread').onclick = toggleSpreadView;
   $('page-spread').classList.toggle('active', spreadView);
   editor.neighbor = neighbor;

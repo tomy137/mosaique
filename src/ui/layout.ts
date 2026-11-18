@@ -1,7 +1,7 @@
 // Mise en page : disposition (moulinet, classique, au hasard), réglages de génération, générer / variante,
 // remplir les cases vides, page vide.
 
-import { applyGenerate, fillEmpty } from '../layout/edit';
+import { applyGenerate, fillEmpty, type GenerateParams } from '../layout/edit';
 import { DEFAULT_MIN_AREA_FRAC, type LayoutMode } from '../layout/generate';
 import { pref } from '../storage/local';
 import { $, num } from './dom';
@@ -29,16 +29,21 @@ export function genInfo() {
   $('sum-layout').textContent = `${mode} · ${num('gen-count')} cases`;
 }
 
+/** Réglages de génération du panneau Mise en page (obliquité, taille min., disposition). */
+export function genParams(): Omit<GenerateParams, 'count' | 'seed'> {
+  return { obliquityDeg: num('gen-angle'), obliqueShare: num('gen-share') / 100, minAreaFrac: num('gen-min') / 100, mode: layoutMode() };
+}
+
+/** Éviter les photos des autres montages (case cochée) ? */
+export const avoidOthers = () => $<HTMLInputElement>('gen-exclude').checked;
+
 /** Photos à écarter : celles déjà placées dans un autre montage du dossier (si la case est cochée). */
 const excluded = () => ($<HTMLInputElement>('gen-exclude').checked ? photosUsedElsewhere() : new Set<string>());
 
 export function generateLayout(newSeed = true) {
   if (newSeed) seed = Math.floor(Math.random() * 1e9);
   const count = Math.max(1, Math.min(120, num('gen-count') || lib.photos.size || 30));
-  store.change((d) => applyGenerate(d, lib, {
-    count, seed, obliquityDeg: num('gen-angle'), obliqueShare: num('gen-share') / 100, minAreaFrac: num('gen-min') / 100,
-    mode: layoutMode(),
-  }, excluded()));
+  store.change((d) => applyGenerate(d, lib, { ...genParams(), count, seed }, excluded()));
   genInfo();
 }
 

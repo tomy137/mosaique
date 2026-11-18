@@ -60,6 +60,25 @@
         <p class="hint" id="montage-info"></p>
       </details>
 
+      <details class="panel" data-key="album" id="album-panel" open hidden>
+        <summary><h2>Album</h2><span class="sum" id="sum-album"></span></summary>
+        <p class="hint">Les photos sont triées par date de prise de vue, puis réparties sur les pages en coupant aux changements de moment. Chaque page est ensuite mise en page avec les réglages de « Mise en page ».</p>
+        <div class="row three">
+          <label class="field" title="Première page à remplir (0 = couverture)">De la page<input id="dist-from" type="number" min="0" max="200" value="1" /></label>
+          <label class="field" title="Dernière page à remplir (des pages sont ajoutées si besoin)">à la page<input id="dist-to" type="number" min="0" max="200" /></label>
+          <span></span>
+        </div>
+        <div class="row three">
+          <label class="field" title="Au moins tant de photos par page">Photos min.<input id="dist-min" type="number" min="1" max="60" value="2" /></label>
+          <label class="field" title="Au plus tant de photos par page">Photos max.<input id="dist-max" type="number" min="1" max="60" value="6" /></label>
+          <span></span>
+        </div>
+        <div class="row">
+          <button id="btn-distribute" class="primary" title="Répartir les photos sur ces pages (remplace leurs mises en page ; ⌘Z pour annuler)">Répartir les photos</button>
+        </div>
+        <p class="hint" id="dist-info"></p>
+      </details>
+
       <details class="panel" data-key="format">
         <summary><h2>Format</h2><span class="sum" id="sum-format"></span></summary>
         <label class="field">Tailles préférées

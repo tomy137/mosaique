@@ -117,6 +117,22 @@ export function movePage(doc: Doc, from: number, to: number) {
   loadPage(doc, pages.indexOf(openPage));
 }
 
+/**
+ * Remplace la mise en page et les photos des pages `from`, `from + 1`… (les textes restent).
+ * Les pages manquantes sont ajoutées. La page ouverte est rechargée.
+ */
+export function setPages(doc: Doc, from: number, layouts: Pick<Page, 'root' | 'crops'>[]) {
+  if (!isAlbum(doc)) return;
+  syncAlbum(doc);
+  const pages = [...doc.album.pages];
+  layouts.forEach((l, k) => {
+    const i = from + k;
+    pages[i] = { ...(pages[i] ?? blankPage()), root: l.root, crops: l.crops };
+  });
+  doc.album.pages = pages;
+  loadPage(doc, doc.album.index);
+}
+
 /** Applique une transformation à toutes les pages (changement de format, orientation). */
 export function forEachPage(doc: Doc, fn: (p: Page) => void) {
   fn(livePage(doc));

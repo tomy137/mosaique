@@ -1,12 +1,17 @@
 // Bibliothèque de photos : les fichiers restent sur le disque, on garde en mémoire
 // un aperçu réduit (affichage) et le File d'origine (export pleine résolution).
 
+import { photoDate } from './exif';
+
 export interface Photo {
   name: string;
   file: File;
   w: number; // dimensions réelles, orientation EXIF appliquée
   h: number;
   url: string; // aperçu réduit (blob:)
+  /** Prise de vue (EXIF), sinon date du fichier (ms). */
+  date: number;
+  dateExif: boolean;
 }
 
 const IMAGE_RE = /\.(jpe?g|png|webp|avif|gif|bmp|tiff?)$/i;
@@ -78,7 +83,7 @@ export class Library {
 }
 
 async function loadPhoto(file: File, name: string): Promise<Photo> {
-  const full = await createImageBitmap(file);
+  const [full, when] = await Promise.all([createImageBitmap(file), photoDate(file)]);
   const w = full.width, h = full.height;
   full.close();
   const k = Math.min(1, PREVIEW_MAX / Math.max(w, h));
@@ -88,5 +93,5 @@ async function loadPhoto(file: File, name: string): Promise<Photo> {
   canvas.getContext('2d')!.drawImage(small, 0, 0);
   small.close();
   const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
-  return { name, file, w, h, url: URL.createObjectURL(blob) };
+  return { name, file, w, h, url: URL.createObjectURL(blob), date: when.date, dateExif: when.exif };
 }

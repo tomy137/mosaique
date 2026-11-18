@@ -4,7 +4,7 @@ import { computeCells, findNode, isValid, leafIds, lineNodeId, promoteChild, rem
 import { area, bbox, lineThroughPolygon, pointInPolygon, type Pt } from '../geometry/polygon';
 import { defaultCrop } from '../photos/crop';
 import type { Library } from '../photos/library';
-import type { BspNode, Cut, Doc } from '../types';
+import type { BspNode, Crop, Cut, Doc, Settings } from '../types';
 import { generate, placeholderAspects, type LayoutMode } from './generate';
 
 /** Coupe une case. La photo éventuelle va dans la plus grande des deux moitiés. Renvoie false si invalide. */
@@ -193,14 +193,23 @@ export function applyGenerate(doc: Doc, lib: Library, g: GenerateParams, exclude
     ...all.filter((p) => inDoc.has(p.name)),
     ...all.filter((p) => !inDoc.has(p.name) && !exclude.has(p.name)),
   ].slice(0, g.count);
-  const n = Math.max(1, g.count);
+  const { root, crops } = layoutPhotos(doc.settings, photos, g);
+  doc.root = root;
+  doc.crops = crops;
+}
+
+/** Mise en page de ces photos-là (une case chacune), complétée de cases vides jusqu'à `g.count`. */
+export function layoutPhotos(
+  settings: Settings, photos: { name: string; w: number; h: number }[], g: GenerateParams,
+): { root: BspNode; crops: Record<string, Crop> } {
+  const n = Math.max(1, g.count, photos.length);
   const aspects = photos.map((p) => p.w / p.h);
   if (aspects.length < n) aspects.push(...placeholderAspects(n - aspects.length, g.seed));
   const { root, cellOf } = generate({
-    aspects, settings: doc.settings, seed: g.seed, obliquityDeg: g.obliquityDeg, obliqueShare: g.obliqueShare,
+    aspects, settings, seed: g.seed, obliquityDeg: g.obliquityDeg, obliqueShare: g.obliqueShare,
     minAreaFrac: g.minAreaFrac, mode: g.mode,
   });
-  doc.root = root;
-  doc.crops = {};
-  photos.forEach((p, i) => { doc.crops[cellOf[i]] = defaultCrop(p.name); });
+  const crops: Record<string, Crop> = {};
+  photos.forEach((p, i) => { crops[cellOf[i]] = defaultCrop(p.name); });
+  return { root, crops };
 }
