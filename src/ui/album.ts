@@ -4,13 +4,14 @@
 import { pageSvg } from '../render/thumb';
 import {
   albumPages, duplicatePage, goToPage, insertPage, isAlbum, movePage, pageCount, pageDoc, pageIndex, pageLabel,
-  removePage, spreads, toAlbum,
+  removePage, spreadOf, spreads, toAlbum,
 } from '../storage/album';
+import { pref } from '../storage/local';
 import { newDoc } from '../storage/doc';
 import { uniqueName, montageName } from '../storage/montages';
 import { $, num } from './dom';
 import { createMontage, renderMontages } from './montages';
-import { app, lib, store } from './state';
+import { app, editor, lib, store } from './state';
 import { toast } from './toast';
 
 /** Change de page sans point d'annulation (⌘Z annule les modifications, pas la navigation). */
@@ -26,6 +27,9 @@ export const nextPage = (step: number) => goPage(pageIndex(store.doc) + step);
 async function newAlbum() {
   const n = Math.max(1, Math.min(200, Math.round(num('album-pages')) || 21));
   const base = newDoc(store.doc.settings);
+  // réglages d'impression habituels des services d'album (à vérifier sur le site choisi)
+  if (!base.settings.bleedMm) base.settings.bleedMm = 3;
+  if (!base.settings.safeMm) base.settings.safeMm = 5;
   toAlbum(base, n);
   const name = uniqueName('Album', app.montages.map(montageName));
   await createMontage(name, false, base);
@@ -47,6 +51,37 @@ function thumb(i: number): SVGSVGElement {
   thumbCache.set(i, { key, svg });
   return svg;
 }
+
+// ------------------------------------------------------------------ double page
+
+let spreadView = pref.get('mosaique.spread') !== '0';
+const neighborCache = new Map<number, { key: string; svg: SVGSVGElement }>();
+
+/** Page en vis-à-vis de la page ouverte (même double page), pour l'éditeur. */
+function neighbor() {
+  if (!spreadView || !isAlbum(store.doc)) return null;
+  const cur = pageIndex(store.doc);
+  const sp = spreadOf(pageCount(store.doc), cur);
+  if (sp.length < 2) return null;
+  const other = sp[0] === cur ? sp[1] : sp[0];
+  const d = pageDoc(store.doc, other);
+  const key = JSON.stringify([d.settings, d.root, d.crops, d.texts, lib.photos.size]);
+  let hit = neighborCache.get(other);
+  if (hit?.key !== key) {
+    hit = { key, svg: pageSvg(d, lib) };
+    neighborCache.set(other, hit);
+  }
+  return { svg: hit.svg, side: (other > cur ? 1 : -1) as 1 | -1, label: pageLabel(other), open: () => goPage(other) };
+}
+
+function setSpreadView(on: boolean) {
+  spreadView = on;
+  pref.set('mosaique.spread', on ? '1' : '0');
+  $('page-spread').classList.toggle('active', on);
+  editor.render();
+}
+
+export const toggleSpreadView = () => { if (isAlbum(store.doc)) setSpreadView(!spreadView); };
 
 function pageButton(i: number, current: number): HTMLElement {
   const b = document.createElement('button');
@@ -146,7 +181,11 @@ export function initAlbum() {
     toast('Page dupliquée : ses photos sont maintenant aussi signalées sur la copie.', 4000);
   };
   $('page-del').onclick = deletePage;
+  $('page-spread').onclick = toggleSpreadView;
+  $('page-spread').classList.toggle('active', spreadView);
+  editor.neighbor = neighbor;
   store.subscribe(renderPages);
-  lib.subscribe(() => { thumbCache.clear(); renderPages(); });
+  lib.subscribe(() => { thumbCache.clear(); neighborCache.clear(); renderPages(); });
   renderPagesNow();
+  editor.render();
 }

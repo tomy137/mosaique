@@ -1,7 +1,7 @@
 // Format de la page : tailles préférées, dimensions, orientation, gouttière, marge, fond.
 
-import { forEachLine, scaleTree } from '../geometry/bsp';
-import { pxForPrint } from '../render/export';
+import { bleedOf, forEachLine, scaleTree } from '../geometry/bsp';
+import { sheetPx } from '../render/export';
 import { forEachPage } from '../storage/album';
 import { loadPresets, savePresets } from '../storage/presets';
 import type { BspNode, FormatPreset } from '../types';
@@ -26,11 +26,14 @@ export function syncInputs() {
   setField('gutter', String(s.gutterMm));
   setField('margin', String(s.marginMm));
   setField('bg', s.bg);
+  setField('bleed', String(s.bleedMm ?? 0));
+  setField('safe', String(s.safeMm ?? 0));
   renderPresets();
-  const px = pxForPrint(store.doc);
-  const pxH = Math.round((s.heightMm / s.widthMm) * px);
-  $('export-info').textContent = `Impression : ${px} × ${pxH} px (${s.widthMm / 10} × ${s.heightMm / 10} cm à ${s.dpi} dpi)`;
-  $('sum-format').textContent = `${s.widthMm / 10} × ${s.heightMm / 10} cm · ${s.dpi} dpi`;
+  const { w: px, h: pxH } = sheetPx(s);
+  const b = bleedOf(s);
+  $('export-info').textContent = `Impression : ${px} × ${pxH} px (${s.widthMm / 10} × ${s.heightMm / 10} cm à ${s.dpi} dpi`
+    + `${b ? `, + ${b} mm de fond perdu de chaque côté` : ''})`;
+  $('sum-format').textContent = `${s.widthMm / 10} × ${s.heightMm / 10} cm · ${s.dpi} dpi${b ? ` · fond perdu ${b} mm` : ''}`;
   $('sum-export').textContent = `${px} × ${pxH} px`;
 }
 
@@ -100,7 +103,7 @@ function deletePreset() {
  * Gouttière et marge s'appliquent en direct (frappe, flèches, molette), pas seulement en quittant le champ.
  * Un seul point d'annulation par modification ; une valeur incomplète en cours de frappe est ignorée.
  */
-function liveSetting(id: string, key: 'gutterMm' | 'marginMm') {
+function liveSetting(id: string, key: 'gutterMm' | 'marginMm' | 'bleedMm' | 'safeMm') {
   const el = $<HTMLInputElement>(id);
   let editing = false;
   el.addEventListener('input', () => {
@@ -113,7 +116,7 @@ function liveSetting(id: string, key: 'gutterMm' | 'marginMm') {
   el.addEventListener('change', () => {
     editing = false;
     store.dropNoopCheckpoint();
-    el.value = String(store.doc.settings[key]); // valeur réellement appliquée
+    el.value = String(store.doc.settings[key] ?? 0); // valeur réellement appliquée
   });
 }
 
@@ -131,6 +134,8 @@ export function initFormat() {
   }
   liveSetting('gutter', 'gutterMm');
   liveSetting('margin', 'marginMm');
+  liveSetting('bleed', 'bleedMm');
+  liveSetting('safe', 'safeMm');
   $('bg').oninput = () => { store.doc.settings.bg = $<HTMLInputElement>('bg').value; editor.render(); };
   $('bg').onchange = () => store.change((d) => { d.settings.bg = $<HTMLInputElement>('bg').value; });
 }

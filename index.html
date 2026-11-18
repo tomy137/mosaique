@@ -83,6 +83,11 @@
           <label class="field">Marge (mm)<input id="margin" type="number" step="0.5" min="0" /></label>
           <label class="field">Fond<input id="bg" type="color" /></label>
         </div>
+        <div class="row three">
+          <label class="field" title="Débord autour de la ligne de coupe, demandé par les imprimeurs (souvent 2 à 5 mm). Avec une marge à 0, les photos vont jusqu'au bord.">Fond perdu (mm)<input id="bleed" type="number" step="0.5" min="0" max="30" /></label>
+          <label class="field" title="Zone à l'intérieur de la coupe où éviter textes et visages (ligne verte pointillée). Seulement affichée.">Sécurité (mm)<input id="safe" type="number" step="0.5" min="0" max="50" /></label>
+          <span></span>
+        </div>
       </details>
 
       <details class="panel" data-key="layout" open>
@@ -179,6 +184,7 @@
           <button id="page-add" title="Ajouter une page vide après celle-ci">+ Page</button>
           <button id="page-dup" title="Dupliquer cette page">Dupliquer</button>
           <button id="page-del" title="Supprimer cette page (⌘Z pour annuler)">Supprimer</button>
+          <button id="page-spread" class="panel-toggle" title="Afficher la page en vis-à-vis, comme dans l'album ouvert (D)">▯▯ Double page <kbd>D</kbd></button>
         </div>
         <div id="page-strip" aria-label="Pages de l'album"></div>
       </div>

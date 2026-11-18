@@ -1,6 +1,6 @@
 // Éditeur interactif en SVG (unités : mm).
 
-import { computeCells, getLine, isValid, setLine, type Cells, type CutInfo } from '../geometry/bsp';
+import { bleedOf, computeCells, getLine, isValid, setLine, type Cells, type CutInfo } from '../geometry/bsp';
 import {
   add, bbox, closestOnBoundary, dist, dot, len, lineThroughPolygon, mul, pointInPolygon, polyToPoints, sub,
   type Poly, type Pt,
@@ -46,6 +46,8 @@ export class Editor {
   private defs: SVGDefsElement;
   private page: SVGRectElement;
   private gCells: SVGGElement;
+  private gGuides: SVGGElement;
+  private gNeighbor: SVGGElement;
   private gOverlay: SVGGElement;
   cells!: Cells;
   mode: Mode = 'select';
@@ -72,6 +74,13 @@ export class Editor {
   onUi?: () => void;
   /** Message bref dans la barre d'état. */
   onToast?: (msg: string) => void;
+  /**
+   * Page voisine (album, double page) : aperçu statique posé contre la page éditée, à gauche (-1)
+   * ou à droite (1) ; un clic l'ouvre.
+   */
+  neighbor?: () => { svg: SVGSVGElement; side: -1 | 1; label: string; open: () => void } | null;
+  private neighborSide: -1 | 0 | 1 = 0;
+  private neighborOpen: (() => void) | null = null;
   /** Fichiers déposés depuis le Finder (avec la case visée, si une seule photo). */
   onDropFiles?: (files: File[], cellId: string | null) => void;
   /** Autres montages du dossier qui utilisent cette photo (pastille orange sur la case). */
@@ -86,7 +95,11 @@ export class Editor {
     el('feDropShadow', { dx: 0, dy: 0, stdDeviation: 3, 'flood-opacity': 0.35 }, shadow);
     this.page = el('rect', { x: 0, y: 0, filter: 'url(#page-shadow)', class: 'page' }, this.svg);
     this.gCells = el('g', { class: 'cells' }, this.svg);
+    this.gGuides = el('g', { class: 'guides' }, this.svg);
+    this.gNeighbor = el('g', { class: 'neighbor' }, this.svg);
     this.gOverlay = el('g', { class: 'overlay' }, this.svg);
+    // la page voisine s'ouvre d'un clic ; elle ne participe pas aux gestes de l'éditeur
+    this.gNeighbor.addEventListener('pointerdown', (e) => e.stopPropagation());
     host.appendChild(this.svg);
 
     this.svg.addEventListener('pointerdown', (e) => this.down(e));
@@ -110,10 +123,15 @@ export class Editor {
   render(): void {
     const doc = this.store.doc, s = doc.settings;
     this.cells = computeCells(doc.root, s);
+    this.renderNeighbor();
     this.applyView();
-    this.page.setAttribute('width', String(s.widthMm));
-    this.page.setAttribute('height', String(s.heightMm));
+    const b = bleedOf(s);
+    this.page.setAttribute('x', String(-b));
+    this.page.setAttribute('y', String(-b));
+    this.page.setAttribute('width', String(s.widthMm + 2 * b));
+    this.page.setAttribute('height', String(s.heightMm + 2 * b));
     this.page.setAttribute('fill', s.bg);
+    this.renderGuides();
 
     if (this.sel?.kind === 'cell' && !this.cells.leaves.has(this.sel.id)) this.sel = null;
     if (this.sel?.kind === 'cut' && !this.cells.cuts.some((c) => c.id === this.sel!.id)) this.sel = null;
@@ -194,17 +212,25 @@ export class Editor {
 
   // ---------------------------------------------------------------- vue (zoom et déplacement)
 
+  /** Étendue affichée en x : la page, plus la page voisine en double page. */
+  private extentX(): [number, number] {
+    const W = this.store.doc.settings.widthMm;
+    return this.neighborSide < 0 ? [-W, W] : this.neighborSide > 0 ? [0, 2 * W] : [0, W];
+  }
+
   private pageCenter(): Pt {
-    const s = this.store.doc.settings;
-    return { x: s.widthMm / 2, y: s.heightMm / 2 };
+    const [x0, x1] = this.extentX();
+    return { x: (x0 + x1) / 2, y: this.store.doc.settings.heightMm / 2 };
   }
 
   private applyView(): void {
     const s = this.store.doc.settings;
-    const dims = `${s.widthMm}x${s.heightMm}`;
+    const [x0, x1] = this.extentX();
+    const dims = `${s.widthMm}x${s.heightMm}x${this.neighborSide}`;
     if (dims !== this.viewDims) { this.viewDims = dims; this.zoom = 1; this.center = null; } // nouveau format : vue d'ensemble
-    const pad = Math.max(s.widthMm, s.heightMm) * 0.03;
-    const w = (s.widthMm + 2 * pad) / this.zoom, h = (s.heightMm + 2 * pad) / this.zoom;
+    const ext = bleedOf(s);
+    const pad = Math.max(x1 - x0, s.heightMm) * 0.03 + ext;
+    const w = (x1 - x0 + 2 * pad) / this.zoom, h = (s.heightMm + 2 * pad) / this.zoom;
     const c = this.center ?? this.pageCenter();
     this.svg.setAttribute('viewBox', `${c.x - w / 2} ${c.y - h / 2} ${w} ${h}`);
     this.onView?.(this.zoom);
@@ -214,7 +240,8 @@ export class Editor {
   /** Le centre de la vue reste sur la page : on ne peut pas la perdre de vue. */
   private clampCenter(p: Pt): Pt {
     const s = this.store.doc.settings;
-    return { x: Math.min(s.widthMm, Math.max(0, p.x)), y: Math.min(s.heightMm, Math.max(0, p.y)) };
+    const [x0, x1] = this.extentX();
+    return { x: Math.min(x1, Math.max(x0, p.x)), y: Math.min(s.heightMm, Math.max(0, p.y)) };
   }
 
   /** Zoom de la vue autour d'un point (le point sous le curseur reste fixe). */
@@ -282,6 +309,47 @@ export class Editor {
     const e = { g, clip, base, img, warn, dup, twin };
     this.els.set(id, e);
     return e;
+  }
+
+  /** Fond perdu assombri (il sera coupé), ligne de coupe et marge de sécurité. */
+  private renderGuides(): void {
+    const s = this.store.doc.settings, g = this.gGuides;
+    g.replaceChildren();
+    const W = s.widthMm, H = s.heightMm, b = bleedOf(s), safe = Math.max(0, s.safeMm ?? 0);
+    if (b > 0) {
+      const outer = `M${-b},${-b}H${W + b}V${H + b}H${-b}Z`;
+      const inner = `M0,0V${H}H${W}V0Z`;
+      el('path', { d: outer + inner, class: 'bleed-mask', 'fill-rule': 'evenodd' }, g);
+      el('rect', { x: 0, y: 0, width: W, height: H, class: 'trim-line' }, g);
+    }
+    if (safe > 0 && safe * 2 < Math.min(W, H)) {
+      el('rect', { x: safe, y: safe, width: W - 2 * safe, height: H - 2 * safe, class: 'safe-line' }, g);
+    }
+  }
+
+  /** Page voisine de la double page (album) et pli de reliure. */
+  private renderNeighbor(): void {
+    const n = this.neighbor?.() ?? null;
+    const g = this.gNeighbor;
+    this.neighborSide = n ? n.side : 0;
+    this.neighborOpen = n?.open ?? null;
+    if (!n) { g.replaceChildren(); return; }
+    const s = this.store.doc.settings, W = s.widthMm, H = s.heightMm;
+    const x = n.side > 0 ? W : -W;
+    if (g.firstChild !== n.svg) {
+      g.replaceChildren(n.svg);
+      const hit = el('rect', { class: 'neighbor-hit' }, g);
+      el('title', {}, hit);
+      el('line', { class: 'fold' }, g);
+      hit.addEventListener('click', () => this.neighborOpen?.());
+    }
+    for (const [k, v] of Object.entries({ x, y: 0, width: W, height: H })) n.svg.setAttribute(k, String(v));
+    const hit = g.querySelector('.neighbor-hit')!;
+    for (const [k, v] of Object.entries({ x, y: 0, width: W, height: H })) hit.setAttribute(k, String(v));
+    hit.querySelector('title')!.textContent = `${n.label} : cliquer pour l'éditer`;
+    const fold = g.querySelector('.fold')!;
+    const fx = n.side > 0 ? W : 0;
+    for (const [k, v] of Object.entries({ x1: fx, y1: 0, x2: fx, y2: H })) fold.setAttribute(k, String(v));
   }
 
   private mmPerPx(): number {

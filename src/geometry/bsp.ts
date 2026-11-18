@@ -31,6 +31,17 @@ export const rootPoly = (w: number, h: number): Poly => [
   { x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h },
 ];
 
+/** Fond perdu (mm) : la feuille déborde de la page coupée de cette largeur tout autour. */
+export const bleedOf = (s: Settings) => Math.max(0, s.bleedMm ?? 0);
+
+/** Feuille entière (page coupée + fond perdu), en coordonnées de la page coupée. */
+export function sheetPoly(s: Settings): Poly {
+  const b = bleedOf(s);
+  return [
+    { x: -b, y: -b }, { x: s.widthMm + b, y: -b }, { x: s.widthMm + b, y: s.heightMm + b }, { x: -b, y: s.heightMm + b },
+  ];
+}
+
 /** Les cinq zones d'un moulinet (4 ailes puis le centre) dans la case `poly`. */
 export function pinwheelRegions(poly: Poly, lines: Cut[]): Poly[] {
   const L = (k: number) => lines[k % 4];
@@ -76,7 +87,7 @@ export function computeCells(root: BspNode, s: Settings): Cells {
       leaves.set(node.id, poly);
     }
   };
-  walk(root, rootPoly(s.widthMm, s.heightMm));
+  walk(root, sheetPoly(s));
   const insets = insetLeaves(leaves, s);
   for (const [id, p] of leaves) {
     if (p.length >= 3 && (insets.get(id)?.length ?? 0) < 3) ok = false;
@@ -84,20 +95,25 @@ export function computeCells(root: BspNode, s: Settings): Cells {
   return { leaves, insets, cuts, ok };
 }
 
-/** Applique la gouttière : marge sur les bords de page, demi-gouttière sur les bords internes. */
+/**
+ * Applique la gouttière : marge sur les bords de page, demi-gouttière sur les bords internes.
+ * La marge se mesure depuis la ligne de coupe ; à 0, les cases vont jusqu'au bord du fond perdu.
+ */
 export function insetLeaves(leaves: Map<string, Poly>, s: Settings): Map<string, Poly> {
-  const W = s.widthMm, H = s.heightMm, e = 1e-4;
+  const b = bleedOf(s), e = 1e-4;
+  const X0 = -b, Y0 = -b, W = s.widthMm + b, H = s.heightMm + b;
+  const border = s.marginMm > 0 ? s.marginMm + b : 0;
   const out = new Map<string, Poly>();
   for (const [id, poly] of leaves) {
     if (poly.length < 3) { out.set(id, []); continue; }
     const offset = (i: number) => {
-      const a = poly[i], b = poly[(i + 1) % poly.length];
-      const border =
-        (Math.abs(a.x) < e && Math.abs(b.x) < e) ||
-        (Math.abs(a.x - W) < e && Math.abs(b.x - W) < e) ||
-        (Math.abs(a.y) < e && Math.abs(b.y) < e) ||
-        (Math.abs(a.y - H) < e && Math.abs(b.y - H) < e);
-      return border ? s.marginMm : s.gutterMm / 2;
+      const a = poly[i], c = poly[(i + 1) % poly.length];
+      const onBorder =
+        (Math.abs(a.x - X0) < e && Math.abs(c.x - X0) < e) ||
+        (Math.abs(a.x - W) < e && Math.abs(c.x - W) < e) ||
+        (Math.abs(a.y - Y0) < e && Math.abs(c.y - Y0) < e) ||
+        (Math.abs(a.y - H) < e && Math.abs(c.y - H) < e);
+      return onBorder ? border : s.gutterMm / 2;
     };
     out.set(id, insetConvex(poly, offset));
   }

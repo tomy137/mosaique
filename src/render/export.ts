@@ -1,12 +1,23 @@
 // Export : rendu sur un canvas à partir des photos originales en pleine résolution.
 
-import { computeCells } from '../geometry/bsp';
+import { bleedOf, computeCells } from '../geometry/bsp';
 import { bbox, type Poly } from '../geometry/polygon';
 import { placement } from '../photos/crop';
 import type { Library } from '../photos/library';
-import type { Doc } from '../types';
+import type { Doc, Settings } from '../types';
 
+/** Largeur d'impression de la page coupée, en pixels (sert d'échelle à l'export). */
 export const pxForPrint = (doc: Doc) => Math.round((doc.settings.widthMm / 25.4) * doc.settings.dpi);
+
+/** Feuille entière (page + fond perdu) en mm et en pixels à la résolution d'impression. */
+export function sheetMm(s: Settings) {
+  const b = bleedOf(s);
+  return { w: s.widthMm + 2 * b, h: s.heightMm + 2 * b, b };
+}
+export function sheetPx(s: Settings) {
+  const m = sheetMm(s), k = s.dpi / 25.4;
+  return { w: Math.round(m.w * k), h: Math.round(m.h * k) };
+}
 
 export async function renderCanvas(
   doc: Doc,
@@ -15,14 +26,17 @@ export async function renderCanvas(
   onProgress?: (done: number, total: number) => void,
 ): Promise<OffscreenCanvas> {
   const s = doc.settings;
+  // widthPx : largeur de la page coupée ; la feuille ajoute le fond perdu tout autour
   const k = widthPx / s.widthMm;
-  const W = Math.round(widthPx), H = Math.round(s.heightMm * k);
+  const sheet = sheetMm(s);
+  const W = Math.round(sheet.w * k), H = Math.round(sheet.h * k);
   const canvas = new OffscreenCanvas(W, H);
   const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.fillStyle = s.bg;
   ctx.fillRect(0, 0, W, H);
+  ctx.translate(sheet.b * k, sheet.b * k);
 
   const cells = computeCells(doc.root, s);
   const entries = [...cells.insets.entries()].filter(([, p]) => p.length >= 3);
@@ -60,7 +74,7 @@ export async function toImageBlob(canvas: OffscreenCanvas, type: 'image/jpeg' | 
 
 export async function toPdfBlob(canvas: OffscreenCanvas, doc: Doc): Promise<Blob> {
   const { jsPDF } = await import('jspdf');
-  const { widthMm: w, heightMm: h } = doc.settings;
+  const { w, h } = sheetMm(doc.settings);
   const pdf = new jsPDF({ orientation: w >= h ? 'landscape' : 'portrait', unit: 'mm', format: [w, h], compress: true });
   const jpeg = new Uint8Array(await (await toImageBlob(canvas, 'image/jpeg', 0.95)).arrayBuffer());
   pdf.addImage(jpeg, 'JPEG', 0, 0, w, h);
@@ -71,13 +85,14 @@ export async function toPdfBlob(canvas: OffscreenCanvas, doc: Doc): Promise<Blob
 export function layoutSvg(doc: Doc): string {
   const s = doc.settings;
   const cells = computeCells(doc.root, s);
+  const { w, h, b } = sheetMm(s);
   const polys = [...cells.insets.entries()]
     .filter(([, p]) => p.length >= 3)
     .map(([id, p]) => `  <polygon id="${id}" points="${p.map((v) => `${v.x.toFixed(3)},${v.y.toFixed(3)}`).join(' ')}" fill="#cccccc" stroke="none"/>`)
     .join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${s.widthMm}mm" height="${s.heightMm}mm" viewBox="0 0 ${s.widthMm} ${s.heightMm}">
-  <rect width="${s.widthMm}" height="${s.heightMm}" fill="${s.bg}"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="${-b} ${-b} ${w} ${h}">
+  <rect x="${-b}" y="${-b}" width="${w}" height="${h}" fill="${s.bg}"/>
 ${polys}
 </svg>
 `;
