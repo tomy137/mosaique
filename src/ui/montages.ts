@@ -209,10 +209,14 @@ async function exportZip() {
   }
 }
 
-/** Le montage ouvert est vide (aucune coupe, aucune photo) : on le retire, il ne contient rien à perdre. */
+/**
+ * Le montage ouvert est vide (aucune coupe, aucune photo, aucun texte) : on le retire, il ne contient rien à perdre.
+ * Un album n'est jamais retiré : la page ouverte peut être vide alors que les autres sont remplies.
+ */
 async function discardIfEmpty() {
   const m = currentMontage();
-  if (!m || store.doc.root.children || Object.keys(store.doc.crops).length) return;
+  const d = store.doc;
+  if (!m || isAlbum(d) || d.root.children || Object.keys(d.crops).length || d.texts?.length) return;
   cancelPendingSave();
   app.montages = app.montages.filter((x) => x !== m);
   if (app.project) removeLocal(montageKey(app.project, m.file));

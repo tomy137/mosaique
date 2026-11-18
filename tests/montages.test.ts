@@ -20,6 +20,7 @@ describe('noms de montages', () => {
   it('fichier et nom uniques', () => {
     expect(uniqueFile('Noël', ['Noël.json', 'noël (2).json'])).toBe('Noël (3).json');
     expect(uniqueName('Noël (copie)', ['Noël (copie)'])).toBe('Noël (copie) (2)');
+    expect(uniqueName('Album (2)', ['Album', 'Album (2)'])).toBe('Album (3)');
     expect(nextDefaultName([{ file: 'a.json', doc: doc('Montage 2', []) }])).toBe('Montage 3');
   });
 

@@ -1,11 +1,13 @@
 // Export : rendu sur un canvas à partir des photos originales en pleine résolution.
 
+import { Zip, ZipPassThrough } from 'fflate';
 import { bleedOf, computeCells } from '../geometry/bsp';
 import { bbox, type Poly } from '../geometry/polygon';
 import { placement } from '../photos/crop';
 import type { Library } from '../photos/library';
 import type { Doc, Settings } from '../types';
 import { drawText } from './text';
+import { pageCount, pageDoc } from '../storage/album';
 
 /** Largeur d'impression de la page coupée, en pixels (sert d'échelle à l'export). */
 export const pxForPrint = (doc: Doc) => Math.round((doc.settings.widthMm / 25.4) * doc.settings.dpi);
@@ -81,6 +83,56 @@ export async function toPdfBlob(canvas: OffscreenCanvas, doc: Doc): Promise<Blob
   const jpeg = new Uint8Array(await (await toImageBlob(canvas, 'image/jpeg', 0.95)).arrayBuffer());
   pdf.addImage(jpeg, 'JPEG', 0, 0, w, h);
   return pdf.output('blob');
+}
+
+/** Nom de fichier d'une page d'album dans le .zip : « 00-couverture.jpg », « 01-page-1.jpg »… */
+export const pageFileName = (i: number) => `${String(i).padStart(2, '0')}-${i === 0 ? 'couverture' : `page-${i}`}.jpg`;
+
+/**
+ * Album entier en un PDF : une page PDF par page de l'album, à la taille de la feuille (fond perdu compris),
+ * chaque page en JPEG à la résolution d'impression. Les pages sont rendues une à une (mémoire).
+ */
+export async function albumPdf(doc: Doc, lib: Library, onPage?: (i: number, n: number) => void): Promise<Blob> {
+  const { jsPDF } = await import('jspdf');
+  const { w, h } = sheetMm(doc.settings);
+  const orientation = w >= h ? 'landscape' : 'portrait';
+  const pdf = new jsPDF({ orientation, unit: 'mm', format: [w, h], compress: true });
+  const n = pageCount(doc);
+  for (let i = 0; i < n; i++) {
+    onPage?.(i, n);
+    const page = pageDoc(doc, i);
+    const canvas = await renderCanvas(page, lib, pxForPrint(page));
+    const jpeg = new Uint8Array(await (await toImageBlob(canvas, 'image/jpeg', 0.93)).arrayBuffer());
+    if (i > 0) pdf.addPage([w, h], orientation);
+    pdf.addImage(jpeg, 'JPEG', 0, 0, w, h, undefined, 'NONE');
+  }
+  return pdf.output('blob');
+}
+
+/** Album entier en images : un JPEG par page (fond perdu compris) dans un .zip, sans recompression. */
+export async function albumJpegZip(doc: Doc, lib: Library, onPage?: (i: number, n: number) => void): Promise<Blob> {
+  const chunks: Uint8Array[] = [];
+  let fail: Error | null = null;
+  let finished!: () => void;
+  const done = new Promise<void>((r) => (finished = r));
+  const zip = new Zip((err, data, final) => {
+    if (err) { fail = err; finished(); return; }
+    chunks.push(data);
+    if (final) finished();
+  });
+  const n = pageCount(doc);
+  for (let i = 0; i < n; i++) {
+    onPage?.(i, n);
+    const page = pageDoc(doc, i);
+    const canvas = await renderCanvas(page, lib, pxForPrint(page));
+    const entry = new ZipPassThrough(pageFileName(i));
+    zip.add(entry);
+    entry.push(new Uint8Array(await (await toImageBlob(canvas, 'image/jpeg', 0.93)).arrayBuffer()), true);
+  }
+  zip.end();
+  await done;
+  if (fail) throw fail;
+  return new Blob(chunks as BlobPart[], { type: 'application/zip' });
 }
 
 /** Tracé seul (cases en polygones) pour une finition éventuelle dans Illustrator. */

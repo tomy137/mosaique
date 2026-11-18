@@ -47,6 +47,17 @@ Mosaïque models the layout the way it actually is: **a page cut into pieces by 
 - 🔴 Warning badge when a photo would print under 150 dpi.
 - 🟠 **"Already used" badge**: a folder is your photo selection, and it can hold several collages. Photos placed in another collage are flagged on the cell and in the library, and the generator avoids them by default.
 
+**Photo books**
+- 📖 **Albums**: a cover and as many pages as you need, each page laid out like a collage. A page strip groups the pages into spreads (cover alone, page 1 on the right, then 2-3, 4-5…); drag to reorder, add, duplicate or delete pages, `[` / `]` to turn them.
+- 📅 **Chronological fill**: photos are sorted by capture date (EXIF) and spread over a range of pages, breaking at the biggest time gaps (a new day, a new moment), with a minimum and maximum number of photos per page. Every page is then laid out automatically, and stays editable.
+- ▯▯ **Spread view**: the facing page is shown next to the one you edit, with the fold, so you judge the double page as it will look in the book. Click it to edit it.
+- ✂️ **Bleed and safety zone**: set the bleed your printing service asks for (3 mm by default); with a 0 margin, photos run to the edge of the bleed. The trim line and the safety zone are drawn on the page.
+- 🖨️ **Print-ready album**: one multi-page PDF at the exact sheet size (bleed included), or a `.zip` with one JPEG per page.
+- 🔁 Photos already used on another page are flagged (« p. 4 »), and generating a page avoids them.
+
+**Text**
+- 🔤 **Titles, dates and captions** (`T`): text boxes on top of the layout, edited in place with a double-click, moved and resized with the mouse, with size, bold, alignment, colour and an optional dark band behind them. In collages too.
+
 **Files & safety**
 - 💾 **Several collages per folder**, auto-saved next to the photos, with a dated **history** and a **trash** folder. Nothing is ever overwritten.
 - 📦 **Export / import** a collage as `.json`, or as a `.zip` that bundles the original photos, to move it to another computer.
@@ -98,6 +109,8 @@ Then **drag a folder of photos from Finder / Explorer onto the page**. Mosaïque
 | `M` | Show / hide the settings panel | `B` | Show / hide the photos panel |
 | `Tab` | Hide / show both panels | `⇧R` | Show / hide the cm rulers |
 | `⌘Z` / `⇧⌘Z` | Undo / redo | `O` · `A` · `E` | Open folder · add photos · export JPEG |
+| `T` | Add a text (double-click or `↵` to edit it) | `[` / `]` | Previous / next album page (also `Page ↑` / `Page ↓`) |
+| `D` | Album: show / hide the facing page | | |
 
 In cut mode, hold `⇧` to force horizontal/vertical and `⌥` to disable snapping.
 
@@ -115,6 +128,7 @@ Christmas 2026/
 └── mosaique-montages/
     ├── Family wall.json        ← one file per collage
     ├── Calendar 2027.json
+    ├── Album 2026.json         ← an album: all its pages in one file
     ├── .historique/            ← dated copies (last 30 per collage)
     └── .corbeille/             ← deleted collages
 ```
@@ -157,6 +171,8 @@ graph TD
 └──────┴──────────────┘
 ```
 - **Print export** redraws everything on a canvas from the original files, at the page size and dpi you chose.
+- **An album is a collage with a list of pages**: the open page lives in the document itself, so the editor, the generator and the export work on it unchanged, and undo, history, trash and backups cover every page. Coordinates stay those of the trimmed page; the bleed simply extends the sheet around it.
+- **Chronological fill** is a small dynamic programme: photos sorted by date are cut into consecutive groups, one per page, maximising the time gaps at the cuts while keeping pages balanced and within the min / max per page.
 
 ## Development
 

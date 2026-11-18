@@ -1,6 +1,7 @@
 // Export image : JPEG, PNG, PDF à la taille d'impression, JPEG écran, tracé SVG.
 
-import { download, layoutSvg, pxForPrint, renderCanvas, toImageBlob, toPdfBlob } from '../render/export';
+import { albumJpegZip, albumPdf, download, layoutSvg, pxForPrint, renderCanvas, toImageBlob, toPdfBlob } from '../render/export';
+import { allPhotos, isAlbum, pageCount, pageLabel } from '../storage/album';
 import { $, fileSafe, num } from './dom';
 import { renderPresets } from './format';
 import { renderMontages } from './montages';
@@ -40,7 +41,35 @@ async function runExport(kind: Kind) {
   }
 }
 
+/** Album entier : un PDF (une page par page) ou un .zip de JPEG, à la résolution d'impression. */
+async function runAlbumExport(kind: 'pdf' | 'zip') {
+  const doc = store.doc;
+  if (!isAlbum(doc)) return;
+  const missing = [...allPhotos(doc)].filter((p) => !lib.get(p)).length;
+  if (missing) toast(`${missing} photo(s) manquante(s) : leurs cases seront grises.`);
+  const buttons = document.querySelectorAll<HTMLButtonElement>('#sidebar button');
+  buttons.forEach((b) => (b.disabled = true));
+  try {
+    const progress = (i: number, n: number) => toast(`Export de l'album : ${pageLabel(i)} (${i + 1}/${n})…`, 0);
+    const blob = kind === 'pdf' ? await albumPdf(doc, lib, progress) : await albumJpegZip(doc, lib, progress);
+    const s = doc.settings;
+    const name = `${fileSafe(currentName())}-${s.widthMm / 10}x${s.heightMm / 10}cm-${pageCount(doc)}p.${kind}`;
+    download(blob, name);
+    toast(`${name} · ${(blob.size / 1e6).toFixed(1)} Mo · ${pageCount(doc)} pages${s.bleedMm ? `, fond perdu ${s.bleedMm} mm compris` : ''}.`, 10000);
+  } catch (e) {
+    toast(`Échec de l'export de l'album : ${(e as Error).message}`, 10000);
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
+    renderPresets();
+    renderMontages();
+  }
+}
+
 export function initExportImage() {
+  $('btn-album-pdf').onclick = () => runAlbumExport('pdf');
+  $('btn-album-zip').onclick = () => runAlbumExport('zip');
+  store.subscribe(() => { $('album-export').hidden = !isAlbum(store.doc); });
+  $('album-export').hidden = !isAlbum(store.doc);
   $<HTMLInputElement>('screen-w').value = '2400';
   $('btn-jpg').onclick = () => runExport('jpg');
   $('btn-png').onclick = () => runExport('png');

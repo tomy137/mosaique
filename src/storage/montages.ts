@@ -38,8 +38,11 @@ export function uniqueFile(name: string, taken: Iterable<string>): string {
 export function uniqueName(name: string, taken: Iterable<string>): string {
   const set = new Set([...taken].map((n) => n.toLowerCase()));
   if (!set.has(name.toLowerCase())) return name;
-  for (let i = 2; ; i++) {
-    const n = `${name} (${i})`;
+  // « Album (2) » déjà pris : on passe à « Album (3) », pas à « Album (2) (2) »
+  const m = name.match(/^(.*) \((\d+)\)$/);
+  const base = m ? m[1] : name;
+  for (let i = m ? Number(m[2]) + 1 : 2; ; i++) {
+    const n = `${base} (${i})`;
     if (!set.has(n.toLowerCase())) return n;
   }
 }
