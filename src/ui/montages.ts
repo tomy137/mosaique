@@ -284,7 +284,7 @@ export async function importMontage(file: File) {
     const base = doc.name?.trim() || file.name.replace(/(\.mosaique)?\.(json|zip)$/i, '');
     const name = uniqueName(base, app.montages.map(montageName));
     await createMontage(name, false, remapPhotos(doc, renames));
-    const missing = [...new Set(Object.values(store.doc.crops).map((c) => c.photo))].filter((p) => !lib.get(p));
+    const missing = [...allPhotos(store.doc)].filter((p) => !lib.get(p)); // toutes les pages d'un album
     toast(`Montage « ${name} » importé${added.length ? `, ${added.length} photo(s) ajoutée(s)${app.folder ? ' au dossier' : ''}` : ''}`
       + `${renames.size ? ` (${renames.size} renommée(s) pour ne rien écraser)` : ''}`
       + `${missing.length ? `. ${missing.length} photo(s) introuvable(s) : importer plutôt le .zip, ou ouvrir le dossier qui les contient` : ''}.`, 12000);
