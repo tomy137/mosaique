@@ -1,6 +1,6 @@
 // Raccourcis clavier. Inactifs pendant la saisie dans un champ (sauf curseurs et cases à cocher).
 
-import { nextPage, openAlbumForm, toggleSpreadView } from './album';
+import { newAlbum, nextPage, toggleSpreadView } from './album';
 import { $ } from './dom';
 import type { Panels } from './panels';
 import { saveNow } from './persistence';
@@ -28,7 +28,7 @@ function letterActions(panels: Panels): Record<string, (e: KeyboardEvent) => voi
     o: click('btn-open'),
     e: click('btn-jpg'),
     n: click('btn-m-new'),
-    l: (e) => { e.preventDefault(); openAlbumForm(); },
+    l: () => newAlbum(),
     p: () => setPresentation(true),
     m: () => panels.toggleLeft(),
     b: () => panels.toggleRight(),

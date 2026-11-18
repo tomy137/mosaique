@@ -38,14 +38,8 @@
         <summary><h2>Montages et albums</h2><span class="sum" id="sum-montage"></span></summary>
         <div class="row">
           <button id="btn-m-new" title="Nouveau montage d'une page, avec les photos pas encore utilisées (N)">+ Montage <kbd>N</kbd></button>
-          <button id="btn-album-open" title="Nouvel album : une couverture et des pages, chacune composée comme un montage (L)">📖 + Album <kbd>L</kbd></button>
+          <button id="btn-album-open" title="Nouvel album : il commence par la couverture, les pages s'ajoutent au fur et à mesure (L)">📖 + Album <kbd>L</kbd></button>
         </div>
-        <div id="album-new-form" class="subform" hidden>
-          <label class="field" title="Nombre de pages, couverture comprise">Nombre de pages (couverture comprise)<input id="album-pages" type="number" min="1" max="200" value="21" /></label>
-          <div class="row">
-            <button id="btn-album-new" class="primary" title="Créer l'album (Entrée)">Créer l'album</button>
-            <button id="btn-album-cancel" title="Annuler (Échap)">Annuler</button>
-          </div>
         </div>
         <div class="row">
           <label class="button" title="Importer un montage ou un album .json ou .zip (ou le glisser sur la page)">Importer (.json, .zip)…<input id="import-input" type="file" accept=".json,.zip,application/json,application/zip" hidden /></label>
@@ -73,7 +67,7 @@
         <p class="hint">Les photos sont triées par date de prise de vue, puis réparties sur les pages en coupant aux changements de moment. Chaque page est ensuite mise en page avec les réglages de « Mise en page ».</p>
         <div class="row three">
           <label class="field" title="Première page à remplir (0 = couverture)">De la page<input id="dist-from" type="number" min="0" max="200" value="1" /></label>
-          <label class="field" title="Dernière page à remplir (des pages sont ajoutées si besoin)">à la page<input id="dist-to" type="number" min="0" max="200" /></label>
+          <label class="field" title="Dernière page à remplir. Vide : autant de pages que nécessaire, ajoutées au besoin">à la page<input id="dist-to" type="number" min="0" max="200" placeholder="auto" /></label>
           <span></span>
         </div>
         <div class="row three">

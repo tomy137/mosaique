@@ -386,7 +386,11 @@ body.presentation .neighbor > svg { opacity: 1; }
 
 /* ------------------------------------------------------------ montages et albums */
 
-.subform { margin-top: 6px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
 .montage-list .m-group { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 6px 2px 0; }
 .montage-list .m-group:first-child { margin-top: 0; }
 .sub-title { font-size: 11px; font-weight: 600; color: var(--muted); margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); letter-spacing: 0.04em; }
+.page-add-tile {
+  height: 64px; padding: 0; border: 1.5px dashed var(--muted); border-radius: 2px; background: transparent;
+  color: var(--muted); font-size: 24px; line-height: 1; cursor: pointer;
+}
+.page-add-tile:hover { border-color: var(--accent-2); color: var(--accent-2); }

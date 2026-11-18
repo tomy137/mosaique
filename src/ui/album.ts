@@ -27,28 +27,16 @@ export function goPage(i: number) {
 
 export const nextPage = (step: number) => goPage(pageIndex(store.doc) + step);
 
-/** « + Album » : petit formulaire (nombre de pages) sous les boutons de création. */
-export function openAlbumForm(open = true) {
-  $('album-new-form').hidden = !open;
-  $('btn-album-open').classList.toggle('active', open);
-  if (open) {
-    const panel = $('album-new-form').closest('details');
-    if (panel) panel.open = true;
-    $<HTMLInputElement>('album-pages').select();
-  }
-}
-
-async function newAlbum() {
-  openAlbumForm(false);
-  const n = Math.max(1, Math.min(200, Math.round(num('album-pages')) || 21));
+/** Nouvel album : la couverture seule ; les pages s'ajoutent ensuite (« + », ou en répartissant les photos). */
+export async function newAlbum() {
   const base = newDoc(store.doc.settings);
   // réglages d'impression habituels des services d'album (à vérifier sur le site choisi)
   if (!base.settings.bleedMm) base.settings.bleedMm = 3;
   if (!base.settings.safeMm) base.settings.safeMm = 5;
-  toAlbum(base, n);
+  toAlbum(base, 1);
   const name = uniqueName('Album', app.montages.map(montageName));
   await createMontage(name, false, base);
-  toast(`« ${name} » créé : couverture + ${n - 1} page(s). Chaque page se compose comme un montage ; « Générer » remplit la page ouverte.`, 8000);
+  toast(`« ${name} » créé avec sa couverture. Ajouter des pages avec « + » au bout de la bande de pages, ou « Répartir les photos » pour en créer autant que nécessaire.`, 9000);
 }
 
 // ------------------------------------------------------------------ bande de pages
@@ -126,6 +114,29 @@ function pageButton(i: number, current: number): HTMLElement {
   return b;
 }
 
+/** Ajoute une page vide en fin d'album et l'ouvre. */
+function addPageAtEnd() {
+  store.change((d) => insertPage(d, pageCount(d)));
+  thumbCache.clear();
+}
+
+/** Case « + » au bout de la bande : l'album grandit au fur et à mesure. */
+function addTile(): HTMLElement {
+  const g = document.createElement('div');
+  g.className = 'spread';
+  const b = document.createElement('button');
+  b.className = 'page-add-tile';
+  b.textContent = '+';
+  b.title = 'Ajouter une page à la fin de l’album';
+  b.style.aspectRatio = `${store.doc.settings.widthMm} / ${store.doc.settings.heightMm}`;
+  b.onclick = addPageAtEnd;
+  const cap = document.createElement('span');
+  cap.className = 'spread-cap';
+  cap.textContent = 'Ajouter';
+  g.append(b, cap);
+  return g;
+}
+
 function renderPagesNow() {
   const album = isAlbum(store.doc);
   $('pages').hidden = !album;
@@ -147,7 +158,7 @@ function renderPagesNow() {
     cap.textContent = sp.length > 1 ? `${sp[0]}-${sp[1]}` : sp[0] === 0 ? 'Couv.' : String(sp[0]);
     g.append(pages, cap);
     return g;
-  }));
+  }), addTile());
   $('page-label').textContent = `${pageLabel(cur)} · ${n} pages`;
   renderDistInfo();
   $<HTMLButtonElement>('page-prev').disabled = cur === 0;
@@ -168,12 +179,20 @@ export function renderPages() {
 const fmtDay = (t: number) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 
 /** Pages visées par la répartition (bornes saisies, ramenées à des valeurs possibles). */
+/**
+ * Pages visées par la répartition. « à la page » vide = automatique : autant de pages que nécessaire
+ * pour les photos disponibles, à raison de (min + max) / 2 photos par page en moyenne.
+ */
 function distRange(): [number, number] {
-  const n = pageCount(store.doc);
   const from = Math.max(0, Math.min(199, Math.round(num('dist-from')) || 0));
   const toRaw = $<HTMLInputElement>('dist-to').value;
-  const to = Math.max(from, Math.min(199, toRaw === '' ? n - 1 : Math.round(Number(toRaw))));
-  return [from, to];
+  if (toRaw !== '') return [from, Math.max(from, Math.min(199, Math.round(Number(toRaw))))];
+  const perPage = Math.max(1, ((num('dist-min') || 1) + (num('dist-max') || 6)) / 2);
+  const pagesFor = (n: number) => Math.max(1, Math.ceil(n / perPage));
+  // d'abord toutes les pages à partir de `from`, puis la plage juste nécessaire
+  let to = from + pagesFor(availablePhotos(from, 199).length) - 1;
+  to = from + pagesFor(availablePhotos(from, to).length) - 1;
+  return [from, Math.min(199, to)];
 }
 
 /** Photos à répartir : celles de la bibliothèque, sauf celles des pages hors plage (et des autres montages si demandé). */
@@ -188,14 +207,14 @@ function availablePhotos(from: number, to: number) {
 
 function renderDistInfo() {
   const toInput = $<HTMLInputElement>('dist-to');
-  if (document.activeElement !== toInput && toInput.value === '') toInput.placeholder = String(pageCount(store.doc) - 1);
   const [from, to] = distRange();
+  if (toInput.value === '') toInput.placeholder = `auto (${to})`;
   const photos = availablePhotos(from, to);
   const n = to - from + 1;
   const undated = photos.filter((p) => !p.dateExif).length;
   const dates = photos.map((p) => p.date).filter(Boolean);
   $('dist-info').textContent = photos.length
-    ? `${photos.length} photo(s) pour ${n} page(s)${dates.length ? `, du ${fmtDay(Math.min(...dates))} au ${fmtDay(Math.max(...dates))}` : ''}.`
+    ? `${photos.length} photo(s) pour ${n} page(s), ${pageLabel(from)} à ${pageLabel(to)}${to >= pageCount(store.doc) ? ` (${to + 1 - pageCount(store.doc)} à ajouter)` : ''}${dates.length ? `, du ${fmtDay(Math.min(...dates))} au ${fmtDay(Math.max(...dates))}` : ''}.`
       + `${undated ? ` ${undated} sans date de prise de vue : rangée(s) selon la date du fichier.` : ''}`
     : 'Aucune photo libre pour ces pages : ajouter des photos, ou élargir la plage.';
   $('sum-album').textContent = `${pageCount(store.doc)} pages`;
@@ -219,7 +238,7 @@ function distributePhotos() {
   thumbCache.clear();
   neighborCache.clear();
   const sizes = groups.map((g) => g.length);
-  toast(`${photos.length} photo(s) réparties sur ${pageLabel(from)} à ${pageLabel(to)} (${Math.min(...sizes)} à ${Math.max(...sizes)} par page)`
+  toast(`${photos.length} photo(s) réparties sur ${pageLabel(from)} à ${pageLabel(to)} (${Math.min(...sizes) === Math.max(...sizes) ? Math.min(...sizes) : `${Math.min(...sizes)} à ${Math.max(...sizes)}`} par page)`
     + `${added ? `, ${added} page(s) ajoutée(s)` : ''}. Chaque page se retouche ensuite ; ⌘Z annule tout.`, 9000);
 }
 
@@ -244,13 +263,7 @@ function deletePage() {
 }
 
 export function initAlbum() {
-  $('btn-album-new').onclick = newAlbum;
-  $('btn-album-open').onclick = () => openAlbumForm($('album-new-form').hidden !== false);
-  $('btn-album-cancel').onclick = () => openAlbumForm(false);
-  $('album-pages').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); newAlbum(); }
-    if (e.key === 'Escape') { e.preventDefault(); openAlbumForm(false); }
-  });
+  $('btn-album-open').onclick = newAlbum;
   $('page-prev').onclick = () => nextPage(-1);
   $('page-next').onclick = () => nextPage(1);
   $('page-add').onclick = () => {
@@ -265,7 +278,7 @@ export function initAlbum() {
   };
   $('page-del').onclick = deletePage;
   $('btn-distribute').onclick = distributePhotos;
-  for (const id of ['dist-from', 'dist-to', 'gen-exclude']) $(id).addEventListener('change', renderDistInfo);
+  for (const id of ['dist-from', 'dist-to', 'dist-min', 'dist-max', 'gen-exclude']) $(id).addEventListener('input', renderDistInfo);
   $('page-spread').onclick = toggleSpreadView;
   $('page-spread').classList.toggle('active', spreadView);
   editor.neighbor = neighbor;
