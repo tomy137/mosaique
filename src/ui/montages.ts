@@ -37,37 +37,70 @@ export function warnIfUsedElsewhere(photo: string) {
   if (where.length) toast(`Attention : « ${photo} » est déjà utilisée ${where.join(' et ')}.`, 7000);
 }
 
+function montageItem(m: Montage): HTMLElement {
+  const isCur = m.file === app.currentFile;
+  const b = document.createElement('button');
+  b.className = `montage-item${isCur ? ' current' : ''}`;
+  const name = document.createElement('span');
+  name.className = 'm-name';
+  name.textContent = montageName(m);
+  const meta = document.createElement('span');
+  meta.className = 'm-meta';
+  const d = isCur ? store.doc : m.doc;
+  const n = allPhotos(d).size;
+  const pages = isAlbum(d) ? `${pageCount(d)} pages · ` : '';
+  meta.textContent = `${pages}${n} photo${n > 1 ? 's' : ''} · ${isCur ? 'ouvert' : ago(m.doc.updatedAt ?? m.doc.createdAt ?? 0)}`;
+  b.title = `${montageName(m)}\n${m.file}`;
+  b.append(name, meta);
+  b.onclick = () => openMontage(m);
+  return b;
+}
+
+function groupTitle(text: string): HTMLElement {
+  const h = document.createElement('div');
+  h.className = 'm-group';
+  h.textContent = text;
+  return h;
+}
+
 export function renderMontages() {
   const sorted = [...app.montages].sort((a, b) => montageName(a).localeCompare(montageName(b), 'fr', { numeric: true }));
-  $('montage-list').replaceChildren(...sorted.map((m) => {
-    const isCur = m.file === app.currentFile;
-    const b = document.createElement('button');
-    b.className = `montage-item${isCur ? ' current' : ''}`;
-    const name = document.createElement('span');
-    name.className = 'm-name';
-    name.textContent = montageName(m);
-    const meta = document.createElement('span');
-    meta.className = 'm-meta';
-    const d = isCur ? store.doc : m.doc;
-    const n = allPhotos(d).size;
-    const pages = isAlbum(d) ? `📖 ${pageCount(d)} p. · ` : '';
-    meta.textContent = `${pages}${n} photo${n > 1 ? 's' : ''} · ${isCur ? 'ouvert' : ago(m.doc.updatedAt ?? m.doc.createdAt ?? 0)}`;
-    b.title = `${montageName(m)}\n${m.file}`;
-    b.append(name, meta);
-    b.onclick = () => openMontage(m);
-    return b;
-  }));
+  const docOf = (m: Montage) => (m.file === app.currentFile ? store.doc : m.doc);
+  const albums = sorted.filter((m) => isAlbum(docOf(m)));
+  const montages = sorted.filter((m) => !isAlbum(docOf(m)));
+  // deux groupes séparés, dès qu'il existe au moins un album
+  $('montage-list').replaceChildren(...(albums.length
+    ? [
+      ...(montages.length ? [groupTitle(`Montages (${montages.length})`), ...montages.map(montageItem)] : []),
+      groupTitle(`📖 Albums (${albums.length})`), ...albums.map(montageItem),
+    ]
+    : montages.map(montageItem)));
+
+  // actions sur ce qui est ouvert : libellés selon le type
+  const album = isAlbum(store.doc);
+  const what = album ? 'cet album' : 'ce montage';
+  $('current-kind').textContent = album ? '📖 Album ouvert' : 'Montage ouvert';
   const input = $<HTMLInputElement>('montage-name');
   if (document.activeElement !== input) input.value = currentName();
+  input.placeholder = album ? 'Nom de l’album' : 'Nom du montage';
+  input.title = `Renommer ${what} (Entrée pour valider)`;
+  $('btn-m-dup').title = `Enregistrer une copie de ${what}`;
+  $('btn-m-del').title = `Supprimer ${what} (gardé dans la corbeille du dossier)`;
+  $('btn-m-json').title = `Exporter ${what} seul (.json)`;
+  $('btn-m-zip').title = `Exporter ${what} avec ses photos originales (.zip)`;
   $<HTMLButtonElement>('btn-m-del').disabled = !app.montages.length;
   $('montage-info').textContent = app.folder
     ? `Enregistré dans ${app.folder.name}/mosaique-montages (historique et corbeille inclus). Le .zip contient aussi les photos originales.`
-    : app.pendingWrite ? 'Pas encore enregistré dans le dossier : cliquer sur « Autoriser l’enregistrement ».' : 'Gardé dans le navigateur : ouvrir un dossier pour enregistrer les montages à côté des photos.';
+    : app.pendingWrite ? 'Pas encore enregistré dans le dossier : cliquer sur « Autoriser l’enregistrement ».' : 'Gardé dans le navigateur : ouvrir un dossier pour enregistrer montages et albums à côté des photos.';
   // résumés visibles quand les sections sont repliées, et titre dans la barre d'outils
   const n = allPhotos(store.doc).size;
-  $('sum-montage').textContent = `${currentName()} · ${n} photo${n > 1 ? 's' : ''}${app.montages.length > 1 ? ` · ${app.montages.length} montages` : ''}`;
+  const counts = [
+    montages.length ? `${montages.length} montage${montages.length > 1 ? 's' : ''}` : '',
+    albums.length ? `${albums.length} album${albums.length > 1 ? 's' : ''}` : '',
+  ].filter(Boolean).join(', ');
+  $('sum-montage').textContent = `${album ? '📖 ' : ''}${currentName()} · ${n} photo${n > 1 ? 's' : ''}${app.montages.length > 1 ? ` · ${counts}` : ''}`;
   $('sum-dossier').textContent = app.project || 'aucun dossier';
-  const page = isAlbum(store.doc) ? ` › ${pageLabel(pageIndex(store.doc))}` : '';
+  const page = album ? ` › ${pageLabel(pageIndex(store.doc))}` : '';
   $('doc-title').textContent = `${app.project ? `${app.project} › ` : ''}${currentName()}${page}`;
 }
 

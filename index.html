@@ -35,27 +35,35 @@
       </details>
 
       <details class="panel" data-key="montage" open>
-        <summary><h2>Montage</h2><span class="sum" id="sum-montage"></span></summary>
+        <summary><h2>Montages et albums</h2><span class="sum" id="sum-montage"></span></summary>
         <div class="row">
-          <input id="montage-name" type="text" placeholder="Nom du montage" title="Renommer le montage (Entrée pour valider)" />
-          <button id="btn-save" title="Enregistrer maintenant, avec une copie dans l'historique (⌘S)">Enregistrer <kbd>⌘S</kbd></button>
+          <button id="btn-m-new" title="Nouveau montage d'une page, avec les photos pas encore utilisées (N)">+ Montage <kbd>N</kbd></button>
+          <button id="btn-album-open" title="Nouvel album : une couverture et des pages, chacune composée comme un montage (L)">📖 + Album <kbd>L</kbd></button>
+        </div>
+        <div id="album-new-form" class="subform" hidden>
+          <label class="field" title="Nombre de pages, couverture comprise">Nombre de pages (couverture comprise)<input id="album-pages" type="number" min="1" max="200" value="21" /></label>
+          <div class="row">
+            <button id="btn-album-new" class="primary" title="Créer l'album (Entrée)">Créer l'album</button>
+            <button id="btn-album-cancel" title="Annuler (Échap)">Annuler</button>
+          </div>
+        </div>
+        <div class="row">
+          <label class="button" title="Importer un montage ou un album .json ou .zip (ou le glisser sur la page)">Importer (.json, .zip)…<input id="import-input" type="file" accept=".json,.zip,application/json,application/zip" hidden /></label>
         </div>
         <div id="montage-list" class="montage-list"></div>
-        <div class="row three">
-          <button id="btn-m-new" title="Nouveau montage avec les photos pas encore utilisées (N)">+ Nouveau <kbd>N</kbd></button>
-          <button id="btn-m-dup" title="Enregistrer une copie de ce montage">Dupliquer</button>
-          <button id="btn-m-del" title="Supprimer ce montage (gardé dans la corbeille du dossier)">Supprimer</button>
+
+        <h3 class="sub-title" id="current-kind">Ouvert</h3>
+        <div class="row">
+          <input id="montage-name" type="text" placeholder="Nom" title="Renommer (Entrée pour valider)" />
+          <button id="btn-save" title="Enregistrer maintenant, avec une copie dans l'historique (⌘S)">Enregistrer <kbd>⌘S</kbd></button>
         </div>
         <div class="row">
-          <label class="field inline" title="Nombre de pages, couverture comprise">Pages<input id="album-pages" type="number" min="1" max="200" value="21" /></label>
-          <button id="btn-album-new" title="Nouvel album : une couverture et des pages, chacune composée comme un montage">📖 Nouvel album</button>
+          <button id="btn-m-dup" title="Enregistrer une copie">Dupliquer</button>
+          <button id="btn-m-del" title="Supprimer (gardé dans la corbeille du dossier)">Supprimer</button>
         </div>
         <div class="row">
-          <button id="btn-m-json" title="Exporter le montage seul (.json)">Exporter .json</button>
-          <button id="btn-m-zip" title="Exporter le montage avec ses photos originales (.zip)">Exporter .zip</button>
-        </div>
-        <div class="row">
-          <label class="button" title="Importer un montage .json ou .zip (ou le glisser sur la page)">Importer un montage…<input id="import-input" type="file" accept=".json,.zip,application/json,application/zip" hidden /></label>
+          <button id="btn-m-json" title="Exporter seul (.json)">Exporter .json</button>
+          <button id="btn-m-zip" title="Exporter avec les photos originales (.zip)">Exporter .zip</button>
         </div>
         <p class="hint" id="montage-info"></p>
       </details>

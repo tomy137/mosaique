@@ -27,7 +27,19 @@ export function goPage(i: number) {
 
 export const nextPage = (step: number) => goPage(pageIndex(store.doc) + step);
 
+/** « + Album » : petit formulaire (nombre de pages) sous les boutons de création. */
+export function openAlbumForm(open = true) {
+  $('album-new-form').hidden = !open;
+  $('btn-album-open').classList.toggle('active', open);
+  if (open) {
+    const panel = $('album-new-form').closest('details');
+    if (panel) panel.open = true;
+    $<HTMLInputElement>('album-pages').select();
+  }
+}
+
 async function newAlbum() {
+  openAlbumForm(false);
   const n = Math.max(1, Math.min(200, Math.round(num('album-pages')) || 21));
   const base = newDoc(store.doc.settings);
   // réglages d'impression habituels des services d'album (à vérifier sur le site choisi)
@@ -233,6 +245,12 @@ function deletePage() {
 
 export function initAlbum() {
   $('btn-album-new').onclick = newAlbum;
+  $('btn-album-open').onclick = () => openAlbumForm($('album-new-form').hidden !== false);
+  $('btn-album-cancel').onclick = () => openAlbumForm(false);
+  $('album-pages').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); newAlbum(); }
+    if (e.key === 'Escape') { e.preventDefault(); openAlbumForm(false); }
+  });
   $('page-prev').onclick = () => nextPage(-1);
   $('page-next').onclick = () => nextPage(1);
   $('page-add').onclick = () => {
