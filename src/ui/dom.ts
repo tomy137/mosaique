@@ -22,5 +22,3 @@ export function ago(t: number): string {
 /** Nom de fichier téléchargeable (sans caractères interdits). */
 export const fileSafe = (s: string) => s.replace(/[\\/:*?"<>|]/g, '-');
 
-/** Nombre de photos différentes placées dans un montage. */
-export const photoCount = (crops: Record<string, { photo: string }>) => new Set(Object.values(crops).map((c) => c.photo)).size;

@@ -1,7 +1,7 @@
 // Barre d'outils (modes, annuler, informations de la sélection), aide, plein écran et zoom de la vue.
 
 import { $ } from './dom';
-import { app, editor, store } from './state';
+import { editor, store, usedElsewhere } from './state';
 
 const HELP = {
   cut: 'Clic : coupe droite au point cliqué · Glisser : coupe libre (aimantée H/V, ⇧ force H/V, ⌥ angle libre) · Échap : sélection · ⌘+molette : zoom de la vue · Espace+glisser : se déplacer',
@@ -35,9 +35,9 @@ function contextItems(): HTMLElement[] {
     if (!info.photo) span.textContent = 'Case vide : glisser une photo dessus';
     else if (info.missing) span.textContent = `${info.photo} · introuvable`;
     else {
-      const others = app.usage.get(info.photo) ?? [];
+      const others = usedElsewhere(info.photo);
       span.append(`${info.photo} · `, bold(`${info.dpi} dpi`, info.dpi! < 150));
-      if ((info.uses ?? 1) > 1) span.append(' · ', bold(`${info.uses}× dans ce montage`, true));
+      if ((info.uses ?? 1) > 1) span.append(' · ', bold(`${info.uses}× ${store.doc.album ? 'sur cette page' : 'dans ce montage'}`, true));
       if (others.length) span.append(' · ', bold(`aussi dans ${others.map((n) => `« ${n} »`).join(', ')}`, true));
       span.title = 'Résolution effective à l’impression (au moins 150 dpi conseillé)';
     }

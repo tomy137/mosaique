@@ -8,6 +8,7 @@ import { renderRecent, initFolder } from './ui/folder';
 import { initFormat, syncInputs } from './ui/format';
 import { initHeic } from './ui/heic';
 import { initExportImage } from './ui/exportImage';
+import { initAlbum } from './ui/album';
 import { initKeyboard } from './ui/keyboard';
 import { genInfo, generateLayout, initLayout } from './ui/layout';
 import { initLibrary, renderLibrary } from './ui/library';
@@ -26,6 +27,7 @@ initPersistence(); // enregistrement automatique : abonné au document juste apr
 initHeic();
 initFolder();
 initMontages();
+initAlbum();
 initFormat();
 initLayout();
 initLibrary();

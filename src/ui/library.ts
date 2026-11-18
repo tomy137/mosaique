@@ -6,7 +6,7 @@ import { defaultCrop } from '../photos/crop';
 import { $ } from './dom';
 import { suggestCount } from './layout';
 import { warnIfUsedElsewhere } from './montages';
-import { app, editor, lib, store } from './state';
+import { app, editor, isUsedElsewhere, lib, store, usedElsewhere } from './state';
 import { toast } from './toast';
 
 type LibFilter = 'all' | 'free' | 'here' | 'elsewhere';
@@ -34,7 +34,7 @@ function placePhoto(cellId: string, photo: string) {
 }
 
 function thumbnail(p: { name: string; w: number; h: number; url: string }, here: Map<string, number>): HTMLElement {
-  const others = app.usage.get(p.name) ?? [];
+  const others = usedElsewhere(p.name);
   const fig = document.createElement('figure');
   fig.className = `${here.has(p.name) ? 'used' : ''}${others.length ? ' elsewhere' : ''}`;
   fig.draggable = true;
@@ -76,15 +76,15 @@ function thumbnail(p: { name: string; w: number; h: number; url: string }, here:
 export function renderLibrary() {
   const here = photoUses(store.doc.crops); // photo → nombre de cases de ce montage
   const all = [...lib.photos.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
-  const isFree = (n: string) => !here.has(n) && !app.usage.has(n);
+  const isFree = (n: string) => !here.has(n) && !isUsedElsewhere(n);
   const keep: Record<LibFilter, (n: string) => boolean> = {
-    all: () => true, free: isFree, here: (n) => here.has(n), elsewhere: (n) => app.usage.has(n),
+    all: () => true, free: isFree, here: (n) => here.has(n), elsewhere: isUsedElsewhere,
   };
   $('library').replaceChildren(...all.filter((p) => keep[filter](p.name)).map((p) => thumbnail(p, here)));
   const free = all.filter((p) => isFree(p.name)).length;
-  const elsewhere = all.filter((p) => app.usage.has(p.name)).length;
+  const elsewhere = all.filter((p) => isUsedElsewhere(p.name)).length;
   $('photo-count').textContent = all.length
-    ? `${all.length} · ${free} libre(s)${elsewhere ? ` · ${elsewhere} dans d’autres montages` : ''}`
+    ? `${all.length} · ${free} libre(s)${elsewhere ? ` · ${elsewhere} ${store.doc.album ? 'ailleurs' : 'dans d’autres montages'}` : ''}`
     : '';
 }
 

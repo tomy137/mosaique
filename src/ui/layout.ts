@@ -5,7 +5,7 @@ import { applyGenerate, fillEmpty } from '../layout/edit';
 import { DEFAULT_MIN_AREA_FRAC, type LayoutMode } from '../layout/generate';
 import { pref } from '../storage/local';
 import { $, num } from './dom';
-import { app, lib, store } from './state';
+import { lib, photosUsedElsewhere, store } from './state';
 import { toast } from './toast';
 
 const MODE_KEY = 'mosaique.layoutMode';
@@ -30,7 +30,7 @@ export function genInfo() {
 }
 
 /** Photos à écarter : celles déjà placées dans un autre montage du dossier (si la case est cochée). */
-const excluded = () => ($<HTMLInputElement>('gen-exclude').checked ? new Set(app.usage.keys()) : new Set<string>());
+const excluded = () => ($<HTMLInputElement>('gen-exclude').checked ? photosUsedElsewhere() : new Set<string>());
 
 export function generateLayout(newSeed = true) {
   if (newSeed) seed = Math.floor(Math.random() * 1e9);

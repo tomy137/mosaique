@@ -190,7 +190,7 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 
 /* ------------------------------------------------------------ zone principale */
 
-main { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; min-height: 0; }
+main { display: grid; grid-template-rows: auto 1fr auto auto; min-width: 0; min-height: 0; }
 
 #toolbar {
   display: flex; gap: 14px; align-items: center; padding: 8px 12px;
@@ -327,3 +327,25 @@ body.presentation .twin { display: none !important; }
 .overlay .handle { fill: #fff; stroke: var(--accent); stroke-width: 2.5px; vector-effect: non-scaling-stroke; cursor: grab; }
 .overlay .cut-preview { stroke: var(--accent); stroke-width: 2.5px; stroke-dasharray: 8 5; vector-effect: non-scaling-stroke; pointer-events: none; }
 .overlay .draw-dot { fill: var(--accent); pointer-events: none; }
+
+/* ------------------------------------------------------------ album : bande de pages */
+
+#pages { border-top: 1px solid var(--line); background: var(--panel); min-width: 0; }
+.pages-tools { display: flex; align-items: center; gap: 6px; padding: 6px 12px 0; }
+.pages-tools .sep { flex: 1; }
+.pages-tools button { padding: 3px 9px; }
+#page-label { color: var(--muted); font-size: 12px; min-width: 120px; text-align: center; }
+#page-strip { display: flex; gap: 14px; overflow-x: auto; padding: 8px 12px 10px; align-items: flex-end; }
+.spread { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: none; }
+.spread-pages { display: flex; gap: 1px; height: 64px; }
+/* page 1 seule à droite, dernière page seule à gauche : la place de la page absente reste vide */
+.spread.right .spread-pages { padding-left: calc(64px * var(--page-ratio, 1.4)); }
+.spread.left .spread-pages { padding-right: calc(64px * var(--page-ratio, 1.4)); }
+.spread-cap { font-size: 10.5px; color: var(--muted); }
+.spread.current .spread-cap { color: var(--accent-2); }
+.page-thumb { height: 100%; padding: 0; border: 2px solid transparent; border-radius: 2px; background: #111; cursor: pointer; overflow: hidden; }
+.page-thumb svg { display: block; width: 100%; height: 100%; }
+.page-thumb.current { border-color: var(--accent); }
+.page-thumb.drop { border-color: var(--accent-2); }
+.page-thumb:hover:not(.current) { border-color: var(--muted); }
+body.presentation #pages { display: none; }

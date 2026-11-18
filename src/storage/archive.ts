@@ -5,6 +5,7 @@ import { strFromU8, strToU8, unzip, Zip, ZipDeflate, ZipPassThrough } from 'ffla
 import { isImageName, type Library } from '../photos/library';
 import { parseDoc } from './doc';
 import type { Doc } from '../types';
+import { allPhotos, forWrite, mapPhotos } from './album';
 
 export const ZIP_DOC = 'montage.json';
 export const ZIP_PHOTOS = 'photos/';
@@ -13,12 +14,12 @@ export interface PhotoRef { name: string; w: number; h: number; size: number }
 
 /** JSON exporté : le montage lui-même + de quoi vérifier les photos (relisible tel quel par parseDoc). */
 export function montageJson(doc: Doc, lib: Library): string {
-  const names = [...new Set(Object.values(doc.crops).map((c) => c.photo))].sort();
+  const names = [...allPhotos(doc)].sort();
   const photos: PhotoRef[] = names.map((n) => {
     const p = lib.get(n);
     return { name: n, w: p?.w ?? 0, h: p?.h ?? 0, size: p?.file.size ?? 0 };
   });
-  return JSON.stringify({ ...doc, app: 'mosaique', exportedAt: Date.now(), photos }, null, 1);
+  return JSON.stringify({ ...forWrite(doc), app: 'mosaique', exportedAt: Date.now(), photos }, null, 1);
 }
 
 /** Zip du montage avec ses photos originales. Renvoie aussi les photos absentes (non incluses). */
@@ -37,7 +38,7 @@ export async function montageZip(
   const json = new ZipDeflate(ZIP_DOC, { level: 6 });
   zip.add(json);
   json.push(strToU8(montageJson(doc, lib)), true);
-  const names = [...new Set(Object.values(doc.crops).map((c) => c.photo))].sort();
+  const names = [...allPhotos(doc)].sort();
   const missing: string[] = [];
   let i = 0;
   for (const n of names) {
@@ -88,6 +89,5 @@ export async function readImport(file: File): Promise<Imported> {
 /** Renomme les photos d'un montage importé (quand une photo de même nom mais différente existe déjà). */
 export function remapPhotos(doc: Doc, renames: Map<string, string>): Doc {
   if (!renames.size) return doc;
-  const crops = Object.fromEntries(Object.entries(doc.crops).map(([id, c]) => [id, { ...c, photo: renames.get(c.photo) ?? c.photo }]));
-  return { ...doc, crops };
+  return mapPhotos(doc, (p) => renames.get(p) ?? p);
 }

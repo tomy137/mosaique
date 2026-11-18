@@ -15,6 +15,7 @@ import { addFiles, renderLibrary } from './library';
 import { createMontage, importMontage, refreshUsage, renderMontages } from './montages';
 import { flushSave, save, showDoc, snapshotCurrent } from './persistence';
 import { app, currentMontage, currentName, lib, store } from './state';
+import { allPhotos } from '../storage/album';
 import { toast } from './toast';
 
 /**
@@ -91,7 +92,7 @@ export async function loadProject(name: string, content: FolderContent, handle: 
     showDoc(clone(cur.doc));
     refreshUsage();
     msg = `${lib.photos.size} photo(s) · ${app.montages.length} montage(s) · ouvert : « ${montageName(cur)} ».`;
-    const used = new Set(Object.values(store.doc.crops).map((c) => c.photo));
+    const used = allPhotos(store.doc);
     const fresh = [...lib.photos.keys()].filter((n) => !used.has(n) && !app.usage.has(n)).length;
     if (fresh) msg += ` ${fresh} photo(s) utilisée(s) dans aucun montage.`;
   } else {

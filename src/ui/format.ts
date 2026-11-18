@@ -2,6 +2,7 @@
 
 import { forEachLine, scaleTree } from '../geometry/bsp';
 import { pxForPrint } from '../render/export';
+import { forEachPage } from '../storage/album';
 import { loadPresets, savePresets } from '../storage/presets';
 import type { BspNode, FormatPreset } from '../types';
 import { $, num } from './dom';
@@ -51,7 +52,8 @@ export function renderPresets() {
 function resize(widthMm: number, heightMm: number, dpi = store.doc.settings.dpi) {
   if (!(widthMm > 0 && heightMm > 0)) return;
   store.change((d) => {
-    scaleTree(d.root, widthMm / d.settings.widthMm, heightMm / d.settings.heightMm);
+    const sx = widthMm / d.settings.widthMm, sy = heightMm / d.settings.heightMm;
+    forEachPage(d, (p) => scaleTree(p.root, sx, sy)); // toutes les pages d'un album
     d.settings.widthMm = widthMm;
     d.settings.heightMm = heightMm;
     d.settings.dpi = dpi;
@@ -120,7 +122,7 @@ export function initFormat() {
   $('btn-preset-save').onclick = savePreset;
   $('btn-preset-del').onclick = deletePreset;
   $('btn-rotate').onclick = () => store.change((d) => {
-    transpose(d.root);
+    forEachPage(d, (p) => transpose(p.root));
     [d.settings.widthMm, d.settings.heightMm] = [d.settings.heightMm, d.settings.widthMm];
   });
   // largeur, hauteur et dpi : appliqués à la validation, pour ne pas déformer le montage à chaque chiffre

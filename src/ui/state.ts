@@ -2,6 +2,7 @@
 
 import { Library } from '../photos/library';
 import { Editor } from '../render/editor';
+import { usageInAlbum } from '../storage/album';
 import { newDoc } from '../storage/doc';
 import type { DirHandle } from '../storage/folder';
 import { currentMontageFile, currentProject, loadLocal, montageKey } from '../storage/local';
@@ -28,6 +29,23 @@ export const saved = loadLocal(montageKey(app.project, app.currentFile)) ?? load
 export const store = new Store(saved ?? newDoc());
 export const lib = new Library();
 export const editor = new Editor($('stage'), store, lib);
+
+// Usage d'une photo hors de la page ouverte : autres montages du dossier + autres pages de l'album.
+// Les autres pages ne changent qu'en changeant de page (ou en annulant) : on recalcule quand la liste change.
+let albumUsageCache: { key: unknown; index: number; map: Map<string, string[]> } = { key: null, index: -1, map: new Map() };
+function albumUsage(): Map<string, string[]> {
+  const a = store.doc.album;
+  if (!a) return new Map();
+  if (albumUsageCache.key !== a.pages || albumUsageCache.index !== a.index) {
+    albumUsageCache = { key: a.pages, index: a.index, map: usageInAlbum(store.doc) };
+  }
+  return albumUsageCache.map;
+}
+
+/** Où la photo est utilisée ailleurs (« p. 4 », « Noël 2025 »), page ouverte exclue. */
+export const usedElsewhere = (photo: string): string[] => [...(albumUsage().get(photo) ?? []), ...(app.usage.get(photo) ?? [])];
+export const isUsedElsewhere = (photo: string) => albumUsage().has(photo) || app.usage.has(photo);
+export const photosUsedElsewhere = () => new Set([...albumUsage().keys(), ...app.usage.keys()]);
 
 export const currentMontage = () => app.montages.find((m) => m.file === app.currentFile);
 export const currentName = () => store.doc.name?.trim() || currentMontage()?.doc.name || 'Montage';

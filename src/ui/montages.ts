@@ -1,6 +1,7 @@
 // Montages du dossier : liste, ouvrir, créer, dupliquer, supprimer (corbeille), renommer,
 // export / import (.json, .zip avec photos), et repérage des photos utilisées ailleurs.
 
+import { allPhotos, isAlbum, pageCount, pageIndex, pageLabel } from '../storage/album';
 import { montageJson, montageZip, readImport, remapPhotos } from '../storage/archive';
 import { newDoc } from '../storage/doc';
 import { fileExists, writeFile } from '../storage/folder';
@@ -12,11 +13,11 @@ import {
 import { photoUses } from '../render/editor';
 import { download } from '../render/export';
 import type { Doc } from '../types';
-import { $, ago, clone, fileSafe, photoCount } from './dom';
+import { $, ago, clone, fileSafe } from './dom';
 import { generateLayout } from './layout';
 import { renderLibrary } from './library';
 import { cancelPendingSave, flushSave, save, showDoc, snapshotCurrent } from './persistence';
-import { app, currentMontage, currentName, editor, lib, store } from './state';
+import { app, currentMontage, currentName, editor, lib, store, usedElsewhere } from './state';
 import { toast } from './toast';
 
 /** Recalcule les photos utilisées dans les autres montages (pastilles orange). */
@@ -28,9 +29,9 @@ export function refreshUsage() {
 /** Alerte après avoir placé une photo : déjà dans une autre case de ce montage, ou dans un autre montage. */
 export function warnIfUsedElsewhere(photo: string) {
   const here = photoUses(store.doc.crops).get(photo) ?? 0;
-  const others = app.usage.get(photo) ?? [];
+  const others = usedElsewhere(photo);
   const where = [
-    ...(here > 1 ? [`${here} fois dans ce montage`] : []),
+    ...(here > 1 ? [`${here} fois ${store.doc.album ? 'sur cette page' : 'dans ce montage'}`] : []),
     ...(others.length ? [`dans ${others.map((n) => `« ${n} »`).join(', ')}`] : []),
   ];
   if (where.length) toast(`Attention : « ${photo} » est déjà utilisée ${where.join(' et ')}.`, 7000);
@@ -47,8 +48,10 @@ export function renderMontages() {
     name.textContent = montageName(m);
     const meta = document.createElement('span');
     meta.className = 'm-meta';
-    const n = photoCount((isCur ? store.doc : m.doc).crops);
-    meta.textContent = `${n} photo${n > 1 ? 's' : ''} · ${isCur ? 'ouvert' : ago(m.doc.updatedAt ?? m.doc.createdAt ?? 0)}`;
+    const d = isCur ? store.doc : m.doc;
+    const n = allPhotos(d).size;
+    const pages = isAlbum(d) ? `📖 ${pageCount(d)} p. · ` : '';
+    meta.textContent = `${pages}${n} photo${n > 1 ? 's' : ''} · ${isCur ? 'ouvert' : ago(m.doc.updatedAt ?? m.doc.createdAt ?? 0)}`;
     b.title = `${montageName(m)}\n${m.file}`;
     b.append(name, meta);
     b.onclick = () => openMontage(m);
@@ -61,10 +64,11 @@ export function renderMontages() {
     ? `Enregistré dans ${app.folder.name}/mosaique-montages (historique et corbeille inclus). Le .zip contient aussi les photos originales.`
     : app.pendingWrite ? 'Pas encore enregistré dans le dossier : cliquer sur « Autoriser l’enregistrement ».' : 'Gardé dans le navigateur : ouvrir un dossier pour enregistrer les montages à côté des photos.';
   // résumés visibles quand les sections sont repliées, et titre dans la barre d'outils
-  const n = photoCount(store.doc.crops);
+  const n = allPhotos(store.doc).size;
   $('sum-montage').textContent = `${currentName()} · ${n} photo${n > 1 ? 's' : ''}${app.montages.length > 1 ? ` · ${app.montages.length} montages` : ''}`;
   $('sum-dossier').textContent = app.project || 'aucun dossier';
-  $('doc-title').textContent = app.project ? `${app.project} › ${currentName()}` : currentName();
+  const page = isAlbum(store.doc) ? ` › ${pageLabel(pageIndex(store.doc))}` : '';
+  $('doc-title').textContent = `${app.project ? `${app.project} › ` : ''}${currentName()}${page}`;
 }
 
 /** Bascule sur un autre montage du dossier (le précédent est enregistré et copié dans l'historique). */
@@ -253,7 +257,7 @@ export async function importMontage(file: File) {
 }
 
 export function initMontages() {
-  editor.usedElsewhere = (photo) => app.usage.get(photo) ?? [];
+  editor.usedElsewhere = usedElsewhere;
   editor.onPhotoPlaced = warnIfUsedElsewhere;
   $('btn-m-new').onclick = newMontage;
   $('btn-m-dup').onclick = duplicateMontage;

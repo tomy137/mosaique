@@ -5,6 +5,7 @@
 //  - l'ancien montage.json à la racine n'est jamais modifié (il est seulement copié comme premier montage).
 
 import type { Doc } from '../types';
+import { albumPages, allPhotos, forWrite } from './album';
 import { parseDoc } from './doc';
 import { writeFile as write, type DirHandle } from './folder';
 
@@ -50,11 +51,11 @@ export function nextDefaultName(montages: Montage[]): string {
 
 /** Même mise en page et mêmes photos (le nom et les dates ne comptent pas). */
 export function sameContent(a: Doc, b: Doc): boolean {
-  const key = (d: Doc) => JSON.stringify([d.settings, d.root, d.crops]);
+  const key = (d: Doc) => JSON.stringify([d.settings, albumPages(d).map((p) => [p.root, p.crops, p.texts ?? []])]);
   return key(a) === key(b);
 }
 
-export const photosOf = (doc: Doc): Set<string> => new Set(Object.values(doc.crops).map((c) => c.photo));
+export const photosOf = allPhotos;
 
 /** Pour chaque photo : les autres montages du dossier qui l'utilisent. */
 export function usageElsewhere(montages: Montage[], currentFile: string): Map<string, string[]> {
@@ -85,7 +86,7 @@ export async function readMontages(dir: DirHandle): Promise<Montage[]> {
 
 export async function writeMontage(dir: DirHandle, m: Montage): Promise<void> {
   const md = await subdir(dir, MONTAGES_DIR, true);
-  await write(md, m.file, JSON.stringify(m.doc, null, 1));
+  await write(md, m.file, JSON.stringify(forWrite(m.doc), null, 1));
 }
 
 const stamp = (t = new Date()) =>
@@ -97,7 +98,7 @@ export async function snapshotMontage(dir: DirHandle, m: Montage): Promise<void>
   const md = await subdir(dir, MONTAGES_DIR, true);
   const hd = await subdir(md, HISTORY_DIR, true);
   const base = m.file.replace(/\.json$/i, '');
-  await write(hd, `${base}__${stamp()}.json`, JSON.stringify(m.doc, null, 1));
+  await write(hd, `${base}__${stamp()}.json`, JSON.stringify(forWrite(m.doc), null, 1));
   const mine: string[] = [];
   for await (const e of hd.values()) if (e.kind === 'file' && e.name.startsWith(`${base}__`)) mine.push(e.name);
   mine.sort();
@@ -110,7 +111,7 @@ export async function snapshotMontage(dir: DirHandle, m: Montage): Promise<void>
 export async function trashMontage(dir: DirHandle, m: Montage): Promise<void> {
   const md = await subdir(dir, MONTAGES_DIR, true);
   const td = await subdir(md, TRASH_DIR, true);
-  await write(td, `${m.file.replace(/\.json$/i, '')}__${stamp()}.json`, JSON.stringify(m.doc, null, 1));
+  await write(td, `${m.file.replace(/\.json$/i, '')}__${stamp()}.json`, JSON.stringify(forWrite(m.doc), null, 1));
   await md.removeEntry(m.file);
 }
 

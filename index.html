@@ -47,6 +47,10 @@
           <button id="btn-m-del" title="Supprimer ce montage (gardé dans la corbeille du dossier)">Supprimer</button>
         </div>
         <div class="row">
+          <label class="field inline" title="Nombre de pages, couverture comprise">Pages<input id="album-pages" type="number" min="1" max="200" value="21" /></label>
+          <button id="btn-album-new" title="Nouvel album : une couverture et des pages, chacune composée comme un montage">📖 Nouvel album</button>
+        </div>
+        <div class="row">
           <button id="btn-m-json" title="Exporter le montage seul (.json)">Exporter .json</button>
           <button id="btn-m-zip" title="Exporter le montage avec ses photos originales (.zip)">Exporter .zip</button>
         </div>
@@ -165,6 +169,18 @@
           <button id="zoom-level" title="Vue d'ensemble (⇧1)">100 %</button>
           <button id="zoom-in" title="Zoomer (+)">+</button>
         </div>
+      </div>
+      <div id="pages" hidden>
+        <div class="pages-tools">
+          <button id="page-prev" title="Page précédente ([ ou Page ↑)">◀ <kbd>[</kbd></button>
+          <span id="page-label"></span>
+          <button id="page-next" title="Page suivante (] ou Page ↓)"><kbd>]</kbd> ▶</button>
+          <span class="sep"></span>
+          <button id="page-add" title="Ajouter une page vide après celle-ci">+ Page</button>
+          <button id="page-dup" title="Dupliquer cette page">Dupliquer</button>
+          <button id="page-del" title="Supprimer cette page (⌘Z pour annuler)">Supprimer</button>
+        </div>
+        <div id="page-strip" aria-label="Pages de l'album"></div>
       </div>
       <button id="exit-presentation" hidden title="Quitter le plein écran (Échap)">✕ Quitter le plein écran</button>
       <footer id="statusbar"><span id="help"></span><div id="toast" role="status" hidden><span id="toast-msg"></span><button id="toast-close" title="Fermer (Échap)" aria-label="Fermer">×</button></div></footer>

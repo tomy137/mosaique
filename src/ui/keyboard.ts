@@ -1,5 +1,6 @@
 // Raccourcis clavier. Inactifs pendant la saisie dans un champ (sauf curseurs et cases à cocher).
 
+import { nextPage } from './album';
 import { $ } from './dom';
 import type { Panels } from './panels';
 import { saveNow } from './persistence';
@@ -29,6 +30,10 @@ function letterActions(panels: Panels): Record<string, (e: KeyboardEvent) => voi
     m: () => panels.toggleLeft(),
     b: () => panels.toggleRight(),
     tab: (e) => { e.preventDefault(); panels.toggleAll(); },
+    '[': () => nextPage(-1),
+    ']': () => nextPage(1),
+    pageup: (e) => { e.preventDefault(); nextPage(-1); },
+    pagedown: (e) => { e.preventDefault(); nextPage(1); },
   };
 }
 

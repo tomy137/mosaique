@@ -3,6 +3,7 @@
 // - sessionStorage : dossier et montage ouverts dans cet onglet (un onglet par montage).
 
 import type { Doc } from '../types';
+import { forWrite } from './album';
 import { parseDoc } from './doc';
 
 const LS_DOC = 'mosaique.doc';
@@ -14,7 +15,7 @@ export const montageKey = (project: string, file: string) => (project && file ? 
 const docKey = (key: string) => (key ? `${LS_DOC}:${key}` : LS_DOC);
 
 export function saveLocal(doc: Doc, key = ''): void {
-  try { localStorage.setItem(docKey(key), JSON.stringify(doc)); } catch { /* stockage indisponible */ }
+  try { localStorage.setItem(docKey(key), JSON.stringify(forWrite(doc))); } catch { /* stockage indisponible */ }
 }
 
 export function loadLocal(key = ''): Doc | null {
