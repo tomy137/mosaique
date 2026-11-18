@@ -18,6 +18,12 @@ const IMAGE_RE = /\.(jpe?g|png|webp|avif|gif|bmp|tiff?)$/i;
 const HEIC_RE = /\.(heic|heif)$/i;
 const PREVIEW_MAX = 1600;
 
+/** Ordre chronologique (date de prise de vue, sinon du fichier), puis par nom à date égale. */
+export const byDate = (a: Pick<Photo, 'name' | 'date'>, b: Pick<Photo, 'name' | 'date'>) =>
+  (a.date || 0) - (b.date || 0) || a.name.localeCompare(b.name, 'fr', { numeric: true });
+
+export const byName = (a: Pick<Photo, 'name'>, b: Pick<Photo, 'name'>) => a.name.localeCompare(b.name, 'fr', { numeric: true });
+
 export const isImageName = (n: string) => IMAGE_RE.test(n);
 export const isHeicName = (n: string) => HEIC_RE.test(n);
 

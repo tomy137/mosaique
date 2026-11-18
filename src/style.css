@@ -394,3 +394,4 @@ body.presentation .neighbor > svg { opacity: 1; }
   color: var(--muted); font-size: 24px; line-height: 1; cursor: pointer;
 }
 .page-add-tile:hover { border-color: var(--accent-2); color: var(--accent-2); }
+.lib-tools .lib-sort { width: auto; min-height: 22px; padding: 1px 6px; font-size: 11px; }

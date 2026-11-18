@@ -3,6 +3,8 @@
 import { PHOTO_MIME, photoUses } from '../render/editor';
 import { fileExists, writeFile } from '../storage/folder';
 import { defaultCrop } from '../photos/crop';
+import { byDate, byName, type Photo } from '../photos/library';
+import { pref } from '../storage/local';
 import { $ } from './dom';
 import { suggestCount } from './layout';
 import { warnIfUsedElsewhere } from './montages';
@@ -11,6 +13,10 @@ import { toast } from './toast';
 
 type LibFilter = 'all' | 'free' | 'here' | 'elsewhere';
 let filter: LibFilter = 'all';
+type LibSort = 'date' | 'name';
+const SORT_KEY = 'mosaique.libSort';
+let sortBy: LibSort = pref.get(SORT_KEY) === 'name' ? 'name' : 'date';
+const fmtDate = (t: number) => new Date(t).toLocaleString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 /** Ajoute des photos ; avec `cellId`, la première est placée dans cette case. */
 export async function addFiles(files: File[], cellId: string | null = null) {
@@ -33,13 +39,13 @@ function placePhoto(cellId: string, photo: string) {
   warnIfUsedElsewhere(photo);
 }
 
-function thumbnail(p: { name: string; w: number; h: number; url: string }, here: Map<string, number>): HTMLElement {
+function thumbnail(p: Photo, here: Map<string, number>): HTMLElement {
   const others = usedElsewhere(p.name);
   const fig = document.createElement('figure');
   fig.className = `${here.has(p.name) ? 'used' : ''}${others.length ? ' elsewhere' : ''}`;
   fig.draggable = true;
   const uses = here.get(p.name) ?? 0;
-  fig.title = `${p.name} — ${p.w} × ${p.h}${uses ? ` · ${uses > 1 ? `${uses} fois` : ''} dans ce montage` : ''}`
+  fig.title = `${p.name} — ${p.w} × ${p.h}${p.date ? ` · ${p.dateExif ? 'prise le' : 'fichier du'} ${fmtDate(p.date)}` : ''}${uses ? ` · ${uses > 1 ? `${uses} fois` : ''} dans ce montage` : ''}`
     + `${others.length ? `\nDéjà utilisée dans : ${others.map((n) => `« ${n} »`).join(', ')}` : ''}`
     + '\nGlisser sur une case, ou cliquer pour la placer dans la case sélectionnée.';
   const img = document.createElement('img');
@@ -75,7 +81,7 @@ function thumbnail(p: { name: string; w: number; h: number; url: string }, here:
 
 export function renderLibrary() {
   const here = photoUses(store.doc.crops); // photo → nombre de cases de ce montage
-  const all = [...lib.photos.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+  const all = [...lib.photos.values()].sort(sortBy === 'date' ? byDate : byName);
   const isFree = (n: string) => !here.has(n) && !isUsedElsewhere(n);
   const keep: Record<LibFilter, (n: string) => boolean> = {
     all: () => true, free: isFree, here: (n) => here.has(n), elsewhere: isUsedElsewhere,
@@ -104,6 +110,13 @@ export function initLibrary() {
       addFiles([...e.dataTransfer.files]);
     });
   }
+  const sortSel = $<HTMLSelectElement>('lib-sort');
+  sortSel.value = sortBy;
+  sortSel.onchange = () => {
+    sortBy = sortSel.value === 'name' ? 'name' : 'date';
+    pref.set(SORT_KEY, sortBy);
+    renderLibrary();
+  };
   $('lib-filter').onclick = (e) => {
     const b = (e.target as HTMLElement).closest('button');
     if (!b) return;

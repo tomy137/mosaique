@@ -3,7 +3,7 @@
 import { computeCells, findNode, isValid, leafIds, lineNodeId, promoteChild, removeCut, splitLeaf, type Cells } from '../geometry/bsp';
 import { area, bbox, lineThroughPolygon, pointInPolygon, type Pt } from '../geometry/polygon';
 import { defaultCrop } from '../photos/crop';
-import type { Library } from '../photos/library';
+import { byDate, type Library } from '../photos/library';
 import type { BspNode, Crop, Cut, Doc, Settings } from '../types';
 import { generate, placeholderAspects, type LayoutMode } from './generate';
 
@@ -183,12 +183,11 @@ export interface GenerateParams { count: number; seed: number; obliquityDeg: num
 /** Génère une mise en page. Avec des photos : une case par photo, placées automatiquement. */
 /**
  * Génère une mise en page. Photos retenues : d'abord celles déjà dans le montage, puis les autres
- * par ordre de nom, en écartant `exclude` (photos déjà utilisées dans d'autres montages).
+ * par date de prise de vue, en écartant `exclude` (photos déjà utilisées dans d'autres montages).
  */
 export function applyGenerate(doc: Doc, lib: Library, g: GenerateParams, exclude: Set<string> = new Set()): void {
   const inDoc = new Set(Object.values(doc.crops).map((c) => c.photo));
-  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'fr', { numeric: true });
-  const all = [...lib.photos.values()].sort(byName);
+  const all = [...lib.photos.values()].sort(byDate); // dans l'ordre de la galerie : les plus anciennes d'abord
   const photos = [
     ...all.filter((p) => inDoc.has(p.name)),
     ...all.filter((p) => !inDoc.has(p.name) && !exclude.has(p.name)),
